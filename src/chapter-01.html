@@ -29,19 +29,19 @@
 </header>
 
 <p class="lead">Eight small pieces of mathematics carry this entire book. You almost certainly know all of them already. What you may not have is the ability to use them without thinking &mdash; and that, not knowledge, is what the chapters ahead will demand.</p>
-<p>A physicist solving a mechanics problem does not rederive the chain rule; it is furniture in the mind, and attention goes to the physics. The same must be true here. When Chapter 6 asks you to minimize a loss under a compute constraint, the minimization itself cannot be where you spend effort &mdash; the insight is in what the answer <em>means</em>. So we drill the furniture first. Read each section, work its drills until they are mechanical, and pass the gate at the end before opening Chapter 2. If the gate is trivial for you, skip this chapter entirely; it exists only to remove obstacles, not to teach anything you will be tested on for its own sake.</p>
+<p>A physicist solving a mechanics problem does not rederive the chain rule; it is furniture in the mind, and attention goes to the physics. The same must be true here. When Chapter 7 asks you to minimize a loss under a compute constraint, the minimization itself cannot be where you spend effort &mdash; the insight is in what the answer <em>means</em>. So we drill the furniture first. Read each section, work its drills until they are mechanical, and pass the gate at the end before opening Chapter 2. If the gate is trivial for you, skip this chapter entirely; it exists only to remove obstacles, not to teach anything you will be tested on for its own sake.</p>
 <p>The eight reflexes are: manipulating <strong>logarithms and power laws</strong>; the <strong>algebra of variance</strong>; the <strong>binomial distribution and its normal approximation</strong>; <strong>constrained minimization by substitution</strong>; <strong>geometric series</strong>; <strong>counting in bits</strong>; <strong>turning a conditional around</strong>; and <strong>counting operations</strong>. Each recurs a dozen times in what follows, and I flag the first major appearance of each as we go.</p>
 
 <h2>1.1 Logarithms and power laws</h2>
 <p>Nearly everything about scale &mdash; how loss falls as models grow, how error falls as data grows, how a probability compounds over a thousand steps &mdash; is a statement about power laws, and every power law is a straight line once you take logarithms. The reflex to build is moving between the two views without hesitation.</p>
 <p>The one manipulation you will perform most often is solving \( a^t = b \) for the exponent. Take logarithms of both sides: \( t \ln a = \ln b \), so \( t = \ln b / \ln a \). The base does not matter as long as it is the same on top and bottom. A special case worth having in your fingers: the number of times you must multiply by a factor \( f<1 \) to fall below a threshold \( \epsilon \) is \( t = \ln \epsilon / \ln f \), and because both logarithms are negative the ratio is positive.</p>
-<p>The second manipulation is extracting an exponent from a verbal description of a power law. Suppose a quantity \( y \) depends on \( x \) as \( y \propto x^{\beta} \), and you are told that multiplying \( x \) by ten multiplies \( y \) by \( 0.6 \) &mdash; a &ldquo;forty percent relative reduction per tenfold increase.&rdquo; Then \( 10^{\beta} = 0.6 \), so \( \beta = \log_{10} 0.6 \approx -0.22 \). Once you have \( \beta \), any other question about the law &mdash; how much \( x \) must grow to halve \( y \), say &mdash; is one more line of the same algebra. This exact move recovers a speech-recognition data law in Chapter 4 and the compute-optimal exponents in Chapter 6.</p>
+<p>The second manipulation is extracting an exponent from a verbal description of a power law. Suppose a quantity \( y \) depends on \( x \) as \( y \propto x^{\beta} \), and you are told that multiplying \( x \) by ten multiplies \( y \) by \( 0.6 \) &mdash; a &ldquo;forty percent relative reduction per tenfold increase.&rdquo; Then \( 10^{\beta} = 0.6 \), so \( \beta = \log_{10} 0.6 \approx -0.22 \). Once you have \( \beta \), any other question about the law &mdash; how much \( x \) must grow to halve \( y \), say &mdash; is one more line of the same algebra. This exact move recovers a speech-recognition data law in Chapter 5 and the compute-optimal exponents in Chapter 7.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.1</span>
 <p class="title">A probability that compounds</p>
 <p>A recurrent network multiplies a gradient by \( 0.95 \) at each time step. After how many steps has the gradient shrunk below one percent of its initial size?</p>
-<p>We need the smallest \( t \) with \( 0.95^{t} < 0.01 \). Taking logarithms, \( t > \ln(0.01)/\ln(0.95) = (-4.605)/(-0.0513) = 89.8 \), so \( t = 90 \). A factor that looks almost harmless &mdash; ninety-five hundredths &mdash; erases the signal in about ninety steps. Chapter 4 makes this the whole reason the LSTM was invented.</p>
+<p>We need the smallest \( t \) with \( 0.95^{t} < 0.01 \). Taking logarithms, \( t > \ln(0.01)/\ln(0.95) = (-4.605)/(-0.0513) = 89.8 \), so \( t = 90 \). A factor that looks almost harmless &mdash; ninety-five hundredths &mdash; erases the signal in about ninety steps. Chapter 5 makes this the whole reason the LSTM was invented.</p>
 </div>
 
 <p>Three constants are worth committing to memory so these estimates need no calculator: \( \ln 2 = 0.693 \), \( \log_{10} 2 = 0.301 \), and \( \ln 10 = 2.303 \). From the first two you can reconstruct most of what you need; for instance, the number of bits in a quantity is its natural-log information divided by \( 0.693 \).</p>
@@ -64,10 +64,10 @@
 <p>Consider a single artificial neuron that forms the weighted sum \( s = \sum_{i=1}^{m} w_i x_i \) of \( m \) inputs. Suppose the inputs are independent with unit variance, and the weights are independent, drawn with mean zero and variance \( \sigma^2 \). What is the variance of \( s \)?</p>
 <p>Each term \( w_i x_i \) is a product of independent zero-mean variables, so it has mean zero and variance \( \operatorname{Var}(w_i)\operatorname{Var}(x_i) = \sigma^2 \cdot 1 = \sigma^2 \). The terms are independent of one another, so their variances add:</p>
 \[ \operatorname{Var}(s) = \sum_{i=1}^{m} \sigma^2 = m\sigma^2. \]
-<p>This is the entire content of &ldquo;fan-in scaling.&rdquo; If we want the neuron's output to have the same scale as its inputs &mdash; neither exploding nor collapsing as signal passes through the layer &mdash; we must choose \( \sigma^2 = 1/m \). We will meet this exact condition again in Chapter 2 as the principle behind sensible initialization, and its cousin in Chapter 5, where the fan-in is a vector dimension and the same square root sets the scale of attention.</p>
+<p>This is the entire content of &ldquo;fan-in scaling.&rdquo; If we want the neuron's output to have the same scale as its inputs &mdash; neither exploding nor collapsing as signal passes through the layer &mdash; we must choose \( \sigma^2 = 1/m \). We will meet this exact condition again in Chapter 3 as the principle behind sensible initialization, and its cousin in Chapter 6, where the fan-in is a vector dimension and the same square root sets the scale of attention.</p>
 </div>
 
-<p>Two consequences deserve to be stated on their own, because each is a derivation you will be asked to reproduce. The dot product of two random \( d \)-dimensional vectors, each component independent with unit variance, has variance \( d \) &mdash; just apply the derivation above with \( m = d \) and unit weights. And the accumulation of \( L \) independent perturbations, each of variance \( v \), has variance \( Lv \) and therefore standard deviation \( \sqrt{Lv} \): a drift that grows like the square root of the number of contributions. Chapter 3 uses precisely this to explain why signals swell as they pass down a hundred-layer residual stack.</p>
+<p>Two consequences deserve to be stated on their own, because each is a derivation you will be asked to reproduce. The dot product of two random \( d \)-dimensional vectors, each component independent with unit variance, has variance \( d \) &mdash; just apply the derivation above with \( m = d \) and unit weights. And the accumulation of \( L \) independent perturbations, each of variance \( v \), has variance \( Lv \) and therefore standard deviation \( \sqrt{Lv} \): a drift that grows like the square root of the number of contributions. Chapter 4 uses precisely this to explain why signals swell as they pass down a hundred-layer residual stack.</p>
 
 <div class="drill">
 <span class="label">Drill 1.2</span>
@@ -82,13 +82,13 @@
 <p>For \( n \) independent trials each succeeding with probability \( p \), the probability of exactly \( k \) successes is \( \binom{n}{k} p^k (1-p)^{n-k} \). The mean number of successes is \( np \) and the variance is \( np(1-p) \); take the square root of the latter for the standard deviation. When \( n \) is large, the distribution is well approximated by a normal curve with that same mean and standard deviation, and probabilities over a range of counts become areas under the bell &mdash; read off from the standard normal function \( \Phi \). Because the binomial is discrete and the normal continuous, we widen the target interval by half a unit at each end; this <em>continuity correction</em> is the little half-step that keeps the approximation honest.</p>
 <p>\( \Phi(z) \) is the probability that a standard normal variable falls below \( z \), and a symmetric interval \( [-z, +z] \) therefore holds \( 2\Phi(z) - 1 \). You will need a few of its values with no table to hand, so here they are.</p>
 <p><span class="keynum">\( \Phi \): &nbsp; 0.5 &rarr; 0.691 &nbsp;&middot;&nbsp; 1.0 &rarr; 0.841 &nbsp;&middot;&nbsp; 1.5 &rarr; 0.933 &nbsp;&middot;&nbsp; 2.0 &rarr; 0.977 &nbsp;&middot;&nbsp; 2.04 &rarr; 0.9793 &nbsp;&middot;&nbsp; 2.1 &rarr; 0.9821 &nbsp;&middot;&nbsp; 2.5 &rarr; 0.994 &nbsp;&middot;&nbsp; 3.0 &rarr; 0.9987</span></p>
-<p>Interpolate linearly between listed points; the error lands in the fourth decimal, below anything the arithmetic in this book can notice. The two awkward entries, \( \Phi(2.04) \) and \( \Phi(2.1) \), are spelled out because a residual-network result in Chapter 3 turns on them and you will be asked to reproduce it closed-book.</p>
+<p>Interpolate linearly between listed points; the error lands in the fourth decimal, below anything the arithmetic in this book can notice. The two awkward entries, \( \Phi(2.04) \) and \( \Phi(2.1) \), are spelled out because a residual-network result in Chapter 4 turns on them and you will be asked to reproduce it closed-book.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.2</span>
 <p class="title">Majority vote of five</p>
 <p>Five independent reasoning chains each reach the correct answer with probability \( 0.6 \); the majority answer is taken. What is the probability the majority is correct? Here \( n = 5 \) is too small for the normal approximation, so we sum the binomial directly for \( k \ge 3 \).</p>
-<p>\( P(3) = \binom{5}{3}(0.6)^3(0.4)^2 = 10 \times 0.216 \times 0.16 = 0.3456 \). \( P(4) = \binom{5}{4}(0.6)^4(0.4) = 5 \times 0.1296 \times 0.4 = 0.2592 \). \( P(5) = (0.6)^5 = 0.0778 \). The sum is \( 0.683 \). Sampling five chains and voting lifts a \( 60\% \) chain to a \( 68\% \) answer &mdash; and Chapter 14 shows this only ever helps when the single-chain probability already exceeds one half.</p>
+<p>\( P(3) = \binom{5}{3}(0.6)^3(0.4)^2 = 10 \times 0.216 \times 0.16 = 0.3456 \). \( P(4) = \binom{5}{4}(0.6)^4(0.4) = 5 \times 0.1296 \times 0.4 = 0.2592 \). \( P(5) = (0.6)^5 = 0.0778 \). The sum is \( 0.683 \). Sampling five chains and voting lifts a \( 60\% \) chain to a \( 68\% \) answer &mdash; and Chapter 15 shows this only ever helps when the single-chain probability already exceeds one half.</p>
 </div>
 
 <div class="drill">
@@ -100,17 +100,17 @@
 </div>
 
 <h2>1.4 Constrained minimization by substitution</h2>
-<p>The most valuable single calculation in this book is this: minimize a quantity that depends on two variables, when those variables are tied together by a constraint. The compute-optimal training recipe of Chapter 6 &mdash; arguably the most consequential result in modern machine learning &mdash; is exactly this calculation, and so are several smaller optimizations along the way. The method is humble: use the constraint to eliminate one variable, then minimize an ordinary one-variable function by setting its derivative to zero.</p>
-<p>Concretely, suppose you must minimize \( f(N, D) \) subject to a constraint of the form \( ND = C \) for a fixed budget \( C \). Solve the constraint for one variable, \( D = C/N \), substitute to obtain a function of \( N \) alone, differentiate, and set the derivative to zero. The value of \( N \) you find, together with \( D = C/N \), is the constrained optimum. The subtlety that trips people &mdash; and it is worth previewing now so it is not a surprise in Chapter 6 &mdash; is that the balance condition at the optimum usually involves the <em>exponents</em> of the terms, not merely the terms themselves. Substitution makes that fall out automatically, which is exactly why we prefer it to guessing.</p>
+<p>The most valuable single calculation in this book is this: minimize a quantity that depends on two variables, when those variables are tied together by a constraint. The compute-optimal training recipe of Chapter 7 &mdash; arguably the most consequential result in modern machine learning &mdash; is exactly this calculation, and so are several smaller optimizations along the way. The method is humble: use the constraint to eliminate one variable, then minimize an ordinary one-variable function by setting its derivative to zero.</p>
+<p>Concretely, suppose you must minimize \( f(N, D) \) subject to a constraint of the form \( ND = C \) for a fixed budget \( C \). Solve the constraint for one variable, \( D = C/N \), substitute to obtain a function of \( N \) alone, differentiate, and set the derivative to zero. The value of \( N \) you find, together with \( D = C/N \), is the constrained optimum. The subtlety that trips people &mdash; and it is worth previewing now so it is not a surprise in Chapter 7 &mdash; is that the balance condition at the optimum usually involves the <em>exponents</em> of the terms, not merely the terms themselves. Substitution makes that fall out automatically, which is exactly why we prefer it to guessing.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.3</span>
 <p class="title">A constrained minimum, start to finish</p>
 <p>Minimize \( f = N^{-1} + 4D^{-1} \) subject to \( ND = 100 \).</p>
-<p>Substitute \( D = 100/N \): \( f(N) = N^{-1} + 4 \cdot \frac{N}{100} = \frac{1}{N} + \frac{N}{25} \). Differentiate and set to zero: \( f'(N) = -N^{-2} + \frac{1}{25} = 0 \), so \( N^2 = 25 \), \( N = 5 \). Then \( D = 100/5 = 20 \), and \( f = 0.2 + 0.2 = 0.4 \). Notice that the two terms came out <em>equal</em> at the optimum &mdash; a recurring signature you can often use to check your work, though in Chapter 6 the equal quantities will be the exponent-weighted terms rather than the bare ones.</p>
+<p>Substitute \( D = 100/N \): \( f(N) = N^{-1} + 4 \cdot \frac{N}{100} = \frac{1}{N} + \frac{N}{25} \). Differentiate and set to zero: \( f'(N) = -N^{-2} + \frac{1}{25} = 0 \), so \( N^2 = 25 \), \( N = 5 \). Then \( D = 100/5 = 20 \), and \( f = 0.2 + 0.2 = 0.4 \). Notice that the two terms came out <em>equal</em> at the optimum &mdash; a recurring signature you can often use to check your work, though in Chapter 7 the equal quantities will be the exponent-weighted terms rather than the bare ones.</p>
 </div>
 
-<p>The same reflex, in a slightly different guise, handles stability questions. When an iterative process multiplies an error by a fixed factor each step, it converges precisely when the magnitude of that factor is below one. Reading off the condition &ldquo;\( |1 - \eta\lambda| < 1 \)&rdquo; and solving it for the allowed range of \( \eta \) is the opening move of Chapter 2. It is the same comfort with a one-variable inequality that substitution demands, so we practice it here.</p>
+<p>The same reflex, in a slightly different guise, handles stability questions. When an iterative process multiplies an error by a fixed factor each step, it converges precisely when the magnitude of that factor is below one. Reading off the condition &ldquo;\( |1 - \eta\lambda| < 1 \)&rdquo; and solving it for the allowed range of \( \eta \) is the opening move of Chapter 3. It is the same comfort with a one-variable inequality that substitution demands, so we practice it here.</p>
 
 <div class="drill">
 <span class="label">Drill 1.4</span>
@@ -121,13 +121,13 @@
 </div>
 
 <h2>1.5 Geometric series</h2>
-<p>An effect that repeats at every future step, discounted by a constant factor each time, sums to a geometric series. Two closed forms cover every use in this book. Starting from the present step, \( \sum_{t \ge 0} \gamma^t = \frac{1}{1-\gamma} \) for \( |\gamma| < 1 \); starting from the next step, \( \sum_{t \ge 1} \gamma^t = \frac{\gamma}{1-\gamma} \). That is all. Chapter 9 uses the second form to weigh a stream of future rewards against a single reward now, and to derive the threshold at which an agent would rather seize a small perpetual reward than accept a large one-off &mdash; the arithmetic behind a famous cautionary tale about misaligned incentives.</p>
+<p>An effect that repeats at every future step, discounted by a constant factor each time, sums to a geometric series. Two closed forms cover every use in this book. Starting from the present step, \( \sum_{t \ge 0} \gamma^t = \frac{1}{1-\gamma} \) for \( |\gamma| < 1 \); starting from the next step, \( \sum_{t \ge 1} \gamma^t = \frac{\gamma}{1-\gamma} \). That is all. Chapter 10 uses the second form to weigh a stream of future rewards against a single reward now, and to derive the threshold at which an agent would rather seize a small perpetual reward than accept a large one-off &mdash; the arithmetic behind a famous cautionary tale about misaligned incentives.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.4</span>
 <p class="title">Perpetual trickle versus one-time prize</p>
 <p>An agent values future rewards with discount factor \( \gamma = 0.95 \) per step. Option A pays 1 unit now and nothing after. Option B pays \( r \) units at every step from the next onward. For which \( r \) does the agent prefer B?</p>
-<p>Option B is worth \( \sum_{t \ge 1} \gamma^t r = \frac{\gamma r}{1-\gamma} = \frac{0.95\,r}{0.05} = 19r \). This exceeds Option A's value of 1 when \( r > 1/19 \approx 0.053 \). A perpetual reward of barely five percent of the one-time prize is already preferable &mdash; a small fact with large consequences in Chapter 9.</p>
+<p>Option B is worth \( \sum_{t \ge 1} \gamma^t r = \frac{\gamma r}{1-\gamma} = \frac{0.95\,r}{0.05} = 19r \). This exceeds Option A's value of 1 when \( r > 1/19 \approx 0.053 \). A perpetual reward of barely five percent of the one-time prize is already preferable &mdash; a small fact with large consequences in Chapter 10.</p>
 </div>
 
 <div class="drill">
@@ -139,13 +139,13 @@
 </div>
 
 <h2>1.6 Counting in bits</h2>
-<p>The final reflex is to measure information in bits, because Chapter 9 &mdash; and, quietly, much of the rest of the book &mdash; treats learning as compression. Three facts carry the load. A choice among \( M \) equally likely options costs \( \log_2 M \) bits to specify. A set of code words with lengths \( \ell_i \) can be made unambiguously decodable if and only if \( \sum_i 2^{-\ell_i} \le 1 \) &mdash; the Kraft inequality &mdash; which we will read in reverse as a rule that assigns a probability \( 2^{-\ell} \) to a description of length \( \ell \). And the number of ways to choose half of \( 2n \) items, \( \binom{2n}{n} \), has a logarithm close to \( 2n - \tfrac12 \log_2(\pi n) \); you will be given this approximation whenever it is needed, but you should know what it says &mdash; that a balanced binary pattern is very nearly incompressible.</p>
-<p>The reason to install this now, rather than in Chapter 9, is that the interpretation matters more than the arithmetic. When a model assigns probabilities to the next token, the number of bits it would take to encode the true token is \( -\log_2 \) of the assigned probability; the average of that quantity is the cross-entropy; and a lower cross-entropy is literally a shorter encoding of the data. &ldquo;A better predictor is a better compressor&rdquo; is not a metaphor in this book &mdash; it is an identity you will compute.</p>
+<p>The final reflex is to measure information in bits, because Chapter 10 &mdash; and, quietly, much of the rest of the book &mdash; treats learning as compression. Three facts carry the load. A choice among \( M \) equally likely options costs \( \log_2 M \) bits to specify. A set of code words with lengths \( \ell_i \) can be made unambiguously decodable if and only if \( \sum_i 2^{-\ell_i} \le 1 \) &mdash; the Kraft inequality &mdash; which we will read in reverse as a rule that assigns a probability \( 2^{-\ell} \) to a description of length \( \ell \). And the number of ways to choose half of \( 2n \) items, \( \binom{2n}{n} \), has a logarithm close to \( 2n - \tfrac12 \log_2(\pi n) \); you will be given this approximation whenever it is needed, but you should know what it says &mdash; that a balanced binary pattern is very nearly incompressible.</p>
+<p>The reason to install this now, rather than in Chapter 10, is that the interpretation matters more than the arithmetic. When a model assigns probabilities to the next token, the number of bits it would take to encode the true token is \( -\log_2 \) of the assigned probability; the average of that quantity is the cross-entropy; and a lower cross-entropy is literally a shorter encoding of the data. &ldquo;A better predictor is a better compressor&rdquo; is not a metaphor in this book &mdash; it is an identity you will compute.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.5</span>
 <p class="title">A probability from a code length</p>
-<p>Two descriptions remain consistent with some data: one is 3 bits long, the other 5 bits. Reading the Kraft inequality as a prior, we assign each a weight \( 2^{-\ell} \): the first gets \( 2^{-3} = 1/8 \), the second \( 2^{-5} = 1/32 \). Normalizing, the shorter description holds \( \frac{1/8}{1/8 + 1/32} = \frac{4}{5} = 0.8 \) of the belief. Every additional bit of length halves a description's share &mdash; which, as Chapter 9 shows, is Occam's razor stated as a theorem rather than a preference.</p>
+<p>Two descriptions remain consistent with some data: one is 3 bits long, the other 5 bits. Reading the Kraft inequality as a prior, we assign each a weight \( 2^{-\ell} \): the first gets \( 2^{-3} = 1/8 \), the second \( 2^{-5} = 1/32 \). Normalizing, the shorter description holds \( \frac{1/8}{1/8 + 1/32} = \frac{4}{5} = 0.8 \) of the belief. Every additional bit of length halves a description's share &mdash; which, as Chapter 10 shows, is Occam's razor stated as a theorem rather than a preference.</p>
 </div>
 
 <div class="drill">
@@ -169,7 +169,7 @@
 <p>A quarter of a test set was seen during training and those items are always answered correctly; on the remaining three quarters the model answers correctly with probability \( 0.6 \). A question is answered correctly. What is the probability it was one of the seen ones?</p>
 <p>Take \( H \) to be &ldquo;this item was seen&rdquo;, so \( P(H) = 0.25 \) and \( P(E \mid H) = 1 \). For an unseen item, \( P(E \mid \text{not } H) = 0.6 \). Assemble the denominator first:</p>
 \[ P(E) = 1 \times 0.25 + 0.6 \times 0.75 = 0.25 + 0.45 = 0.70. \]
-<p>Then Bayes' rule gives \( P(H \mid E) = (1 \times 0.25)/0.70 = 0.357 \). Better than a third of this model's correct answers are recall rather than skill &mdash; and note that the observed accuracy, \( 0.70 \), fell out of the denominator on the way. Chapter 8 runs this calculation backwards, inferring the quarter from the seventy percent, and the algebra is the same three symbols.</p>
+<p>Then Bayes' rule gives \( P(H \mid E) = (1 \times 0.25)/0.70 = 0.357 \). Better than a third of this model's correct answers are recall rather than skill &mdash; and note that the observed accuracy, \( 0.70 \), fell out of the denominator on the way. Chapter 9 runs this calculation backwards, inferring the quarter from the seventy percent, and the algebra is the same three symbols.</p>
 </div>
 
 <div class="drill">
@@ -184,7 +184,7 @@
 <p>The last reflex is the cheapest to state and the most used in Part III: knowing what a computation costs before you run it. Everything expensive in this book is a matrix product, and a matrix product has exactly one cost formula.</p>
 <p>The <strong>matrix-multiply primitive</strong> is the whole of it. Multiplying an \( a \times b \) matrix by a \( b \times c \) matrix produces \( ac \) entries, each a sum of \( b \) products, so the cost is</p>
 \[ a\,b\,c \quad \text{multiply--accumulate operations,} \]
-<p>where a <em>multiply&ndash;accumulate</em> is one multiplication and one addition taken together, as the hardware performs it. Count these, not multiplications and additions separately, and the arithmetic in later chapters will match the figures the field quotes. When one of the three dimensions is 1 &mdash; a matrix meeting a single vector &mdash; the formula still holds and the cost collapses to \( ab \), a fact Chapter 10 builds an entire economics on.</p>
+<p>where a <em>multiply&ndash;accumulate</em> is one multiplication and one addition taken together, as the hardware performs it. Count these, not multiplications and additions separately, and the arithmetic in later chapters will match the figures the field quotes. When one of the three dimensions is 1 &mdash; a matrix meeting a single vector &mdash; the formula still holds and the cost collapses to \( ab \), a fact Chapter 11 builds an entire economics on.</p>
 <p>One corollary carries more weight than the rule itself. Every weight in a matrix is touched exactly once per input the matrix processes, so <strong>a layer of \( P \) weights costs about \( P \) multiply&ndash;accumulates per input</strong>. Cost per input is therefore a statement about parameter count, and nothing else &mdash; which is why so much of the field's arithmetic can be done knowing only how big a model is.</p>
 
 <div class="box worked">
@@ -192,7 +192,7 @@
 <p class="title">The cost of one feed-forward block</p>
 <p>A layer takes a vector of width \( 512 \), maps it up to \( 2048 \), and maps it back down to \( 512 \). What does it cost at one position, and how does that compare with its parameter count?</p>
 <p>Up: a \( 1 \times 512 \) vector against a \( 512 \times 2048 \) matrix, so \( 1 \times 512 \times 2048 = 1{,}048{,}576 \) multiply&ndash;accumulates. Down: \( 1 \times 2048 \times 512 \), the same again. The block costs \( 2{,}097{,}152 \) operations per position, about \( 2.1 \) million.</p>
-<p>Its weights number \( 512 \times 2048 + 2048 \times 512 = 2{,}097{,}152 \) &mdash; the same figure, as the corollary promised. Write the width as \( d \) and the middle as \( 4d \) and this is \( 8d^2 \) either way, which is the expression Chapter 5 balances against the cost of attention.</p>
+<p>Its weights number \( 512 \times 2048 + 2048 \times 512 = 2{,}097{,}152 \) &mdash; the same figure, as the corollary promised. Write the width as \( d \) and the middle as \( 4d \) and this is \( 8d^2 \) either way, which is the expression Chapter 6 balances against the cost of attention.</p>
 </div>
 
 <div class="drill">
@@ -205,7 +205,7 @@
 
 <h2>1.9 What the chapter bought</h2>
 <p>That is the whole toolkit. Logarithms turn every power law into a straight line and every compounding factor into a step count. Variance algebra tells you how independent quantities accumulate &mdash; the single most reused fact in the book. The binomial and its normal approximation handle anything that can go one of two ways. Constrained minimization by substitution is the engine behind the field's most consequential result. Geometric series price anything that repeats forever at a discount. Counting in bits is the currency in which prediction, compression, and simplicity all turn out to be the same quantity. Turning a conditional around separates what a number says from what it is usually taken to say. And counting operations converts a description of a model into a bill.</p>
-<p>You will not meet these again as objects of study. From here they are furniture, assumed silently in every derivation, and the hours spent making them automatic now are repaid many times over. Chapter 2 puts the first of them to work immediately, on the question that held deep learning back for two decades: not what a network can represent, but whether gradient descent can travel to it.</p>
+<p>You will not meet these again as objects of study. From here they are furniture, assumed silently in every derivation, and the hours spent making them automatic now are repaid many times over. What Chapter 2 adds is not more mathematics but the objects the mathematics will be applied to &mdash; a layer, a gradient step, a softmax, a token &mdash; each written down once, precisely, so that no later derivation has to describe its own subject in words.</p>
 
 <h2>Exercises</h2>
 <p>Work these on paper. The A set drills the reflexes; the B set combines them the way later chapters will; the C challenge points forward. Solutions to B and C are in Appendix D.</p>
@@ -228,17 +228,17 @@
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Compounding two ways.</strong> A signal is multiplied by 0.9 at each of 100 steps in one design, and by 0.99 at each of 100 steps in another. Give the surviving fraction in each case, and comment on which design preserves memory. (Preview of Chapter 4.)</li>
-<li><strong>Square-root drift.</strong> A fixed output coordinate receives, from each of \( L \) layers, an independent zero-mean perturbation of variance 0.01. Write the standard deviation of the accumulated perturbation as a function of \( L \), and evaluate it at \( L = 100 \). (Preview of Chapter 3.)</li>
-<li><strong>Exponent-weighted balance.</strong> Minimize \( f = A N^{-a} + B D^{-b} \) subject to \( ND = C \), by substitution. Show that at the optimum \( aAN^{-a} = bBD^{-b} \), and explain in one sentence why the bare terms \( AN^{-a} \) and \( BD^{-b} \) are <em>not</em> equal unless \( a = b \). (This is the engine of Chapter 6.)</li>
-<li><strong>A leaked benchmark.</strong> A fraction \( c \) of test items were seen in training and are always answered correctly; on the remaining clean items the true accuracy is 0.6. The observed accuracy is 0.7. Solve for \( c \). Then, given that an item was answered correctly, find the probability it was one of the leaked items. (Preview of Chapter 8.)</li>
+<li><strong>Compounding two ways.</strong> A signal is multiplied by 0.9 at each of 100 steps in one design, and by 0.99 at each of 100 steps in another. Give the surviving fraction in each case, and comment on which design preserves memory. (Preview of Chapter 5.)</li>
+<li><strong>Square-root drift.</strong> A fixed output coordinate receives, from each of \( L \) layers, an independent zero-mean perturbation of variance 0.01. Write the standard deviation of the accumulated perturbation as a function of \( L \), and evaluate it at \( L = 100 \). (Preview of Chapter 4.)</li>
+<li><strong>Exponent-weighted balance.</strong> Minimize \( f = A N^{-a} + B D^{-b} \) subject to \( ND = C \), by substitution. Show that at the optimum \( aAN^{-a} = bBD^{-b} \), and explain in one sentence why the bare terms \( AN^{-a} \) and \( BD^{-b} \) are <em>not</em> equal unless \( a = b \). (This is the engine of Chapter 7.)</li>
+<li><strong>A leaked benchmark.</strong> A fraction \( c \) of test items were seen in training and are always answered correctly; on the remaining clean items the true accuracy is 0.6. The observed accuracy is 0.7. Solve for \( c \). Then, given that an item was answered correctly, find the probability it was one of the leaked items. (Preview of Chapter 9.)</li>
 </ol>
 </div>
 
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>The halving cost of scale.</strong> A loss term falls as \( L \propto N^{-\alpha} \) with \( \alpha = 0.076 \). Show that halving this term requires multiplying \( N \) by \( 2^{1/\alpha} \), and evaluate the factor. Then, separately, suppose data must scale as \( D \propto N^{0.74} \); if \( N \) is raised by a factor of 1000, by what factor must \( D \) grow? Comment on what these two numbers together say about the cost of progress by scale alone. (You will meet both inside Chapter 6.)</li>
+<li><strong>The halving cost of scale.</strong> A loss term falls as \( L \propto N^{-\alpha} \) with \( \alpha = 0.076 \). Show that halving this term requires multiplying \( N \) by \( 2^{1/\alpha} \), and evaluate the factor. Then, separately, suppose data must scale as \( D \propto N^{0.74} \); if \( N \) is raised by a factor of 1000, by what factor must \( D \) grow? Comment on what these two numbers together say about the cost of progress by scale alone. (You will meet both inside Chapter 7.)</li>
 </ol>
 </div>
 
@@ -251,7 +251,7 @@
 <h4>Readings for Chapter 1</h4>
 <ul>
 <li><a href="https://udlbook.github.io/udlbook/">Prince, <em>Understanding Deep Learning</em></a><span class="how">Free and rigorous. Chapter 1 and the probability appendix cover everything above at more length; keep it as the reference to consult whenever a later capsule moves too fast.</span></li>
-<li><a href="https://www.3blue1brown.com/topics/neural-networks">Sanderson, <em>Neural Networks</em> (3Blue1Brown)</a><span class="how">Watch before Chapter 2 if you have never seen a neural network. Visual intuition for what the later algebra is about.</span></li>
+<li><a href="https://www.3blue1brown.com/topics/neural-networks">Sanderson, <em>Neural Networks</em> (3Blue1Brown)</a><span class="how">Watch before Chapter 3 if you have never seen a neural network. Visual intuition for what the later algebra is about.</span></li>
 <li><a href="https://www.khanacademy.org/math/statistics-probability/random-variables-stats-library">Khan Academy &mdash; Random variables and the binomial distribution</a><span class="how">Only if Sections 1.2 and 1.3 felt shaky. Work the exercises until the mean and variance of a binomial are automatic.</span></li>
 <li><a href="https://d2l.ai/">Zhang et al., <em>Dive into Deep Learning</em></a><span class="how">A code-forward alternative reference for the whole book; its preliminaries chapter covers this toolkit alongside the notation you will meet later.</span></li>
 </ul>
@@ -259,7 +259,7 @@
 
 <footer>
   <span>Chapter 1 &middot; The Mathematical Toolkit</span>
-  <span><a href="chapter-02.html">Next: The Geometry of Training &rarr;</a></span>
+  <span><a href="chapter-02.html">Next: The Objects &rarr;</a></span>
 </footer>
 
 </div>

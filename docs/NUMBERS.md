@@ -18,7 +18,7 @@ Two rows are under revision — see `docs/SECOND-EDITION-PLAN.md`:
   count (4 fp32 master weight + 4 momentum + 4 second moment + 4 fp32 gradient),
   not a measurement, and WP3 derives it. The label changes when the derivation
   lands, not before.
-- The **Chapter 5 perplexity row** records a result that appears nowhere in
+- The **Chapter 6 perplexity row** records a result that appears nowhere in
   `src/`. It is kept here as a commitment to write it, not as a record of the
   text as it stands. Flagged below.
 
@@ -26,7 +26,7 @@ Two rows are under revision — see `docs/SECOND-EDITION-PLAN.md`:
 
 ## Reference hardware (Part III)
 
-Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
+Introduced once in Chapter 11 and treated as established in 12, 13 and 17.
 
 | quantity | value | note |
 |---|---|---|
@@ -38,7 +38,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 
 ---
 
-## Chapter 2 — The Geometry of Training
+## Chapter 3 — The Geometry of Training
 
 | result | value |
 |---|---|
@@ -48,7 +48,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 | ratio | **10** = √κ |
 | fan-in 4096 with σ = 0.01 → output variance | 0.41 |
 
-## Chapter 3 — The Architecture of Depth
+## Chapter 4 — The Architecture of Depth
 
 | result | value |
 |---|---|
@@ -61,7 +61,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 | RF ≥ 500 needs n = | **8** (gives 511) |
 | single-kernel : dilated-stack weights | **≈ 3,600 : 1** |
 
-## Chapter 4 — Memory and Gates
+## Chapter 5 — Memory and Gates
 
 | result | value |
 |---|---|
@@ -72,7 +72,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 | — of which embedding + readout | **≈ 45%** |
 | WER law: −40% per decade → halving costs | **≈ 23×** data (273k hours) |
 
-## Chapter 5 — Attention
+## Chapter 6 — Attention
 
 | result | value |
 |---|---|
@@ -82,7 +82,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 | mean reversed lag | **exactly n** (unchanged) |
 | perplexity 114.5 → 78.4 | **0.55 bits/token** — ⚠ not yet in the text |
 
-## Chapter 6 — The Economics of Scale
+## Chapter 7 — The Economics of Scale
 
 | result | value |
 |---|---|
@@ -94,7 +94,7 @@ Introduced once in Chapter 10 and treated as established in 11, 12 and 16.
 
 Exponents 0.076, 0.095, 0.74 are **given**.
 
-## Chapter 7 — The Machinery of Scale
+## Chapter 8 — The Machinery of Scale
 
 | result | value |
 |---|---|
@@ -105,7 +105,7 @@ Exponents 0.076, 0.095, 0.74 are **given**.
 
 16 bytes/parameter of optimizer state is **given**.
 
-## Chapter 8 — Measurement
+## Chapter 9 — Measurement
 
 | result | value |
 |---|---|
@@ -117,7 +117,7 @@ Exponents 0.076, 0.095, 0.74 are **given**.
 | observed 0.70, clean 0.60 → contamination | **c = 0.25** |
 | P(contaminated | correct) | **0.357** |
 
-## Chapter 9 — Compression and Occam
+## Chapter 10 — Compression and Occam
 
 | result | value |
 |---|---|
@@ -135,7 +135,7 @@ Exponents 0.076, 0.095, 0.74 are **given**.
 
 OLS excess risk σ²p/(n−p−1) is **given**.
 
-## Chapter 10 — The Price of a Token
+## Chapter 11 — The Price of a Token
 
 | result | value |
 |---|---|
@@ -146,7 +146,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | decode ceiling, 14 GB weights | **143 tokens/s** |
 | MFU at 4200 tok/s on 7 B | **56%** |
 
-## Chapter 11 — Bytes over FLOPs
+## Chapter 12 — Bytes over FLOPs
 
 | result | value |
 |---|---|
@@ -157,7 +157,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | α=0.8, k=4, c=0.1 | 3.36 per 1.4 → **2.4×** |
 | α=0.5, same | **1.38×** |
 
-## Chapter 12 — Sparsity and Thrift
+## Chapter 13 — Sparsity and Thrift
 
 | result | value |
 |---|---|
@@ -168,7 +168,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | LoRA at d=4096, r=16 | 131,072 = **0.78%** |
 | 7 B optimizer state, full → LoRA | 112 GB → **1.1 GB** |
 
-## Chapter 13 — Teaching Preferences
+## Chapter 14 — Teaching Preferences
 
 | result | value |
 |---|---|
@@ -180,7 +180,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | GRPO group (1,1,1,0,0) | **+0.82** / **−1.22** |
 | 7 B policy vs policy+critic | 140 GB vs **280 GB** |
 
-## Chapter 14 — Thinking at Inference Time
+## Chapter 15 — Thinking at Inference Time
 
 | result | value |
 |---|---|
@@ -190,7 +190,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | 5 chains at p = 0.6 | **0.683** |
 | 5 chains at p = 0.4 | **0.317** (worse than one) |
 
-## Chapter 15 — Generation by Denoising
+## Chapter 16 — Generation by Denoising
 
 | result | value |
 |---|---|
@@ -199,7 +199,7 @@ OLS excess risk σ²p/(n−p−1) is **given**.
 | ᾱ at t = 100 | 0.133 |
 | CFG ε_u=0.20, ε_c=0.30, w=7.5 | **0.95** (extrapolation) |
 
-## Chapter 16 — The Whole Lifecycle
+## Chapter 17 — The Whole Lifecycle
 
 | result | value |
 |---|---|

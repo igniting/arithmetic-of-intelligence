@@ -19,8 +19,8 @@ This is why every chapter ends with a gate specifying what to reproduce on blank
 paper rather than what to have read.
 
 **Three derivations carry a "three separate days" protocol.**
-Momentum's √κ speedup (Chapter 2), the compute-optimal allocation (Chapter 6),
-and the preference-optimization collapse (Chapter 13). These are the results
+Momentum's √κ speedup (Chapter 3), the compute-optimal allocation (Chapter 7),
+and the preference-optimization collapse (Chapter 14). These are the results
 with the highest transfer: the second and third use the same
 substitute-differentiate-cancel discipline, and the book says so explicitly so
 the fluency compounds. Spaced reproduction rather than rereading is the
@@ -42,13 +42,13 @@ derivation.
 
 **Systems before alignment in Part III.**
 Chapters 10–12 (inference economics, IO-aware attention, sparsity) precede
-Chapter 13 (post-training) deliberately. Without the cost vocabulary — bytes,
+Chapter 14 (post-training) deliberately. Without the cost vocabulary — bytes,
 bandwidth, budgets — the alignment era's design choices (why the critic gets
 deleted, why low-rank adaptation mattered) read as fashion rather than forced
 moves.
 
 **Part II ends on compression, not on scale.**
-Chapter 9 (minimum description length, the length prior, typicality) is placed
+Chapter 10 (minimum description length, the length prior, typicality) is placed
 last in the classical part because it retroactively unifies everything before it:
 overfitting, generalization, and Occam's razor become one subject measured in
 one unit. Placing it earlier would waste that effect.
@@ -96,7 +96,7 @@ answers because they are formative; end-of-chapter B and C exercises do not,
 because looking is too easy and the value is in the attempt.
 
 **Readings are annotated with how to read them.** Every entry says what to do
-with the source: "read the ablations as experiments about your Derivation 3.1",
+with the source: "read the ablations as experiments about your Derivation 4.1",
 "read it only *after* your first blank-paper attempt". A bare bibliography
 transfers nothing.
 

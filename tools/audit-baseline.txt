@@ -10,45 +10,49 @@
 # lines to make a new failure go away -- that is the one thing this file is not
 # for.
 #
-# WP1  back-references   1  (2 struck: Chapter 1 now contains both)
+# Chapter numbers below are post-renumber (WP1). Regenerated once, at the
+# renumber, after verifying the set was the same 39 defects and not a larger
+# one -- see the commit message.
+#
+# WP1  back-references   1
 # WP5  reading locators  31
 # WP6  bank + labs       7
-chapter 06 credits Chapter 13 with 'DPO collapse uses' — no such wording there
-chapter 9: 6 bank entries but only 5 derivation/worked boxes to teach them
-chapter 14 has no entry in the derivation bank
+chapter 07 credits Chapter 14 with 'DPO collapse uses' — no such wording there
+chapter 10: 6 bank entries but only 5 derivation/worked boxes to teach them
 chapter 15 has no entry in the derivation bank
 chapter 16 has no entry in the derivation bank
-lab 4 runs alongside Chapter 12 but its acceptance criterion cites Derivation 10.x — anchor it to Chapter 10
-lab 7 runs alongside Chapter 15 but its acceptance criterion cites Derivation 12.x — anchor it to Chapter 12
-lab 8 runs alongside Chapter 16 but its acceptance criterion cites Derivation 11.x — anchor it to Chapter 11
-chapter 02: reading points at a whole work — "An interactive derivation of exactly the \( \sqrt{\kappa} \)..."
-chapter 03: reading points at a whole work — "Read the ablations as experiments about Derivation 3.1 &mdas..."
-chapter 03: reading points at a whole work — "The pre-activation block of the C-challenge, argued in full;..."
-chapter 03: reading points at a whole work — "Derivation 3.2, measured: they delete blocks at test time an..."
-chapter 03: reading points at a whole work — "The origin of Derivation 3.3; note how the exponential sched..."
-chapter 04: reading points at a whole work — "Read twice. Derivation 4.1 is its arithmetic shadow; the gat..."
-chapter 04: reading points at a whole work — "Read for pleasure, then for syllabus; the character-level ex..."
-chapter 04: reading points at a whole work — "Skim the data-scaling results and check them against Worked ..."
-chapter 05: reading points at a whole work — "The paper rebuilt as runnable code; read it for the wiring o..."
-chapter 05: reading points at a whole work — "The original attention; the alignment maps show the constant..."
-chapter 05: reading points at a whole work — "A consolidating survey; read after the derivations to place ..."
-chapter 06: reading points at a whole work — "The ideology around the arithmetic; read after the derivatio..."
-chapter 07: reading points at a whole work — "The micro-batching pipeline of Derivation 7.1; read their bu..."
-chapter 07: reading points at a whole work — "Tensor parallelism &mdash; a different axis of splitting; re..."
-chapter 07: reading points at a whole work — "Parallelism strategies illustrated end to end; useful for th..."
-chapter 08: reading points at a whole work — "The case for emergence; read it as the claim Derivation 8.1 ..."
-chapter 08: reading points at a whole work — "The rebuttal, built on exactly the metric argument of this c..."
-chapter 08: reading points at a whole work — "On what actually ends up in training data &mdash; the empiri..."
-chapter 09: reading points at a whole work — "The second descent, measured and explained; check their peak..."
-chapter 09: reading points at a whole work — "Read last, then write one paragraph on where the compression..."
-chapter 10: reading points at a whole work — "The canonical treatment of this chapter's material. Recomput..."
-chapter 10: reading points at a whole work — "The cache reduction of Worked Example 10.1; note carefully w..."
-chapter 10: reading points at a whole work — "Pairs directly with this chapter; work its rooflines alongsi..."
-chapter 11: reading points at a whole work — "Skim for what changed &mdash; work partitioning, not mathema..."
-chapter 11: reading points at a whole work — "The parallel discovery; useful for seeing the same result pr..."
-chapter 12: reading points at a whole work — "The outlier story of Derivation 12.1's second sensitivity, d..."
-chapter 14: reading points at a whole work — "The matched-compute comparison of Worked Example 14.1, done ..."
-chapter 14: reading points at a whole work — "Where sequential inference-time scaling began; classify it y..."
-chapter 14: reading points at a whole work — "Voting as a selector; check their gains against Derivation 1..."
-chapter 15: reading points at a whole work — "The consolidating survey; read after the derivations to plac..."
-chapter 16: reading points at a whole work — "This chapter's argument in full, with the empirical iso-qual..."
+chapter 17 has no entry in the derivation bank
+lab 4 runs alongside Chapter 13 but its acceptance criterion cites Derivation 11.x — anchor it to Chapter 11
+lab 7 runs alongside Chapter 16 but its acceptance criterion cites Derivation 13.x — anchor it to Chapter 13
+lab 8 runs alongside Chapter 17 but its acceptance criterion cites Derivation 12.x — anchor it to Chapter 12
+chapter 03: reading points at a whole work — "An interactive derivation of exactly the \( \sqrt{\kappa} \)..."
+chapter 04: reading points at a whole work — "Read the ablations as experiments about Derivation 4.1 &mdas..."
+chapter 04: reading points at a whole work — "The pre-activation block of the C-challenge, argued in full;..."
+chapter 04: reading points at a whole work — "Derivation 4.2, measured: they delete blocks at test time an..."
+chapter 04: reading points at a whole work — "The origin of Derivation 4.3; note how the exponential sched..."
+chapter 05: reading points at a whole work — "Read twice. Derivation 5.1 is its arithmetic shadow; the gat..."
+chapter 05: reading points at a whole work — "Read for pleasure, then for syllabus; the character-level ex..."
+chapter 05: reading points at a whole work — "Skim the data-scaling results and check them against Worked ..."
+chapter 06: reading points at a whole work — "The paper rebuilt as runnable code; read it for the wiring o..."
+chapter 06: reading points at a whole work — "The original attention; the alignment maps show the constant..."
+chapter 06: reading points at a whole work — "A consolidating survey; read after the derivations to place ..."
+chapter 07: reading points at a whole work — "The ideology around the arithmetic; read after the derivatio..."
+chapter 08: reading points at a whole work — "The micro-batching pipeline of Derivation 8.1; read their bu..."
+chapter 08: reading points at a whole work — "Tensor parallelism &mdash; a different axis of splitting; re..."
+chapter 08: reading points at a whole work — "Parallelism strategies illustrated end to end; useful for th..."
+chapter 09: reading points at a whole work — "The case for emergence; read it as the claim Derivation 9.1 ..."
+chapter 09: reading points at a whole work — "The rebuttal, built on exactly the metric argument of this c..."
+chapter 09: reading points at a whole work — "On what actually ends up in training data &mdash; the empiri..."
+chapter 10: reading points at a whole work — "The second descent, measured and explained; check their peak..."
+chapter 10: reading points at a whole work — "Read last, then write one paragraph on where the compression..."
+chapter 11: reading points at a whole work — "The canonical treatment of this chapter's material. Recomput..."
+chapter 11: reading points at a whole work — "The cache reduction of Worked Example 11.1; note carefully w..."
+chapter 11: reading points at a whole work — "Pairs directly with this chapter; work its rooflines alongsi..."
+chapter 12: reading points at a whole work — "Skim for what changed &mdash; work partitioning, not mathema..."
+chapter 12: reading points at a whole work — "The parallel discovery; useful for seeing the same result pr..."
+chapter 13: reading points at a whole work — "The outlier story of Derivation 13.1's second sensitivity, d..."
+chapter 15: reading points at a whole work — "The matched-compute comparison of Worked Example 15.1, done ..."
+chapter 15: reading points at a whole work — "Where sequential inference-time scaling began; classify it y..."
+chapter 15: reading points at a whole work — "Voting as a selector; check their gains against Derivation 1..."
+chapter 16: reading points at a whole work — "The consolidating survey; read after the derivations to plac..."
+chapter 17: reading points at a whole work — "This chapter's argument in full, with the empirical iso-qual..."

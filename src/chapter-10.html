@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 10 · The Price of a Token — The Arithmetic of Intelligence</title>
+<title>Chapter 10 · Compression and Occam — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -23,134 +23,163 @@
 <div class="page">
 
 <header class="opener">
-  <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 10</span>
-  <h1 class="ch">The Price of a Token</h1>
-  <p class="ch-blurb">Training cost was a count of operations. Serving cost is something else entirely: generating one token requires reading every weight in the model, which makes decoding a memory problem wearing a compute costume.</p>
+  <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 10</span>
+  <h1 class="ch">Compression and Occam</h1>
+  <p class="ch-blurb">Underneath every result so far lies one currency: description length. Learning is compression, simplicity is a probability, and Occam's razor is not a preference but a theorem.</p>
 </header>
 
-<p class="lead">Ask what limits how fast a large model can write text, and the natural answer is arithmetic: it must do a great many multiplications per word. The natural answer is wrong by a factor of about a hundred and fifty. Generating a single token requires reading every weight in the model out of memory, and it is that reading, not the arithmetic, that sets the pace.</p>
-<p>The reason is that serving splits into two regimes that behave nothing alike. <strong>Prefill</strong> handles the whole prompt at once: large matrices meet large matrices, and the arithmetic units are genuinely the constraint. <strong>Decode</strong> emits one token at a time, so a matrix meets a single vector, and the entire parameter store must stream out of memory to support a comparatively tiny amount of useful multiplication. That second regime is memory-bound, and nearly every serving optimization of recent years is a response to it.</p>
+<p class="lead">&ldquo;A model that predicts well compresses well.&rdquo; That sounds like a metaphor, or at best an analogy. It is neither. It is an identity, and you can compute both sides of it. Once you take it literally, a surprising amount of what the earlier chapters treated separately &mdash; overfitting, generalization, why simple explanations deserve preference &mdash; turns out to be one subject measured in one unit.</p>
+<p>The organizing principle has one sentence: <strong>total code length equals model bits plus residual bits, and the smallest total wins.</strong> Everything in this chapter is that sentence in a different costume &mdash; selecting among models, weighing two hypotheses, pricing the precision of a weight, reading a cross-entropy as a file size, or assigning belief to competing programs. We take them in turn.</p>
 
-<div class="box worked">
-<span class="label">Reference hardware</span>
-<p class="title">The accelerator we will cost everything against</p>
-<p>Throughout Part III, take a reference accelerator with <span class="keynum">312 TFLOP/s</span> of half-precision compute, <span class="keynum">2 TB/s</span> of memory bandwidth, and about 20 MB of fast on-chip memory. Half precision means 2 bytes per value. These are given constants, like a beam's Young's modulus &mdash; you never memorize them, you are handed them and you compute.</p>
-</div>
-
-<h2>10.1 The key&ndash;value cache</h2>
-<p>Attention at position \( t \) compares the current query against the keys of all previous positions and mixes their values. Recomputing those keys and values at every step would be quadratic waste, so they are stored &mdash; the <em>KV cache</em>. Its size is pure bookkeeping, and it is the first thing to compute about any serving setup.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 10.1</span>
-<p class="title">The size of the cache</p>
-<p>Per layer, per attention head that owns its own keys and values, and per sequence position, we store one key vector and one value vector, each of dimension \( d_{\text{head}} \). Hence for \( L \) layers, \( H_{kv} \) key/value heads, sequence length \( s \), batch \( B \), and \( \beta \) bytes per value:</p>
-\[ \text{cache bytes} = 2 \cdot L \cdot H_{kv} \cdot d_{\text{head}} \cdot s \cdot B \cdot \beta. \]
-<p>The leading 2 counts keys and values separately &mdash; the single most commonly dropped factor in this calculation. Note that the cache is <em>linear in sequence length</em>: it is a per-token cost that accumulates, not a fixed overhead.</p>
-</div>
+<h2>10.1 Minimum description length</h2>
+<p>To communicate a dataset to someone who has neither, you may send a model and then the residuals &mdash; the corrections the model fails to predict. A complex model costs more to send but leaves smaller residuals; a simple one costs little but leaves much unexplained. The <em>minimum description length</em> principle says: choose the model minimizing the total.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 10.1</span>
-<p class="title">A cache that outgrows the model</p>
-<p>Take a 7-billion-parameter model with \( L = 32 \) layers, 32 heads of dimension 128, half precision, at context \( s = 4096 \), batch 1.</p>
-<p>Work the per-token figure first, since that is the quantity that accumulates. Per position the cache holds \( 2 \times 32 \times 32 \times 128 \times 2 = 524{,}288 \) bytes &mdash; about <span class="keynum">0.5 MB per token</span>. Over the full context: \( 524{,}288 \times 4096 = \) <span class="keynum">2.15 GB</span>.</p>
-<p>The weights themselves are \( 7\times10^9 \times 2 = 14 \) GB. At batch 1 the cache is modest &mdash; but at batch 8 it becomes 17 GB and <em>exceeds the weights</em>. This, not arithmetic, is why long-context serving is expensive.</p>
-<p>Now suppose the model shares keys and values across groups of heads, so that \( H_{kv} = 8 \) rather than 32. The cache falls by a factor of four, to <span class="keynum">0.54 GB</span> &mdash; the entire motivation for grouped-query attention.</p>
+<p class="title">The zero-error model loses</p>
+<p>Each parameter costs 12 bits to encode. Three candidates fit the same data:</p>
+<ul>
+<li><strong>Model A</strong>: 3 parameters, residuals need 480 bits. Total \( 36 + 480 = 516 \).</li>
+<li><strong>Model B</strong>: 20 parameters, residuals need 190 bits. Total \( 240 + 190 = \) <span class="keynum">430</span>.</li>
+<li><strong>Model C</strong>: 60 parameters, residuals need 0 bits &mdash; it fits the training data perfectly. Total \( 720 + 0 = 720 \).</li>
+</ul>
+<p>MDL selects <strong>B</strong> at 430 bits. Note what happened to Model C: it achieves zero training error and is the <em>worst</em> of the three, losing by 290 bits. Overfitting, usually described in words, is here a number &mdash; the price of the parameters exceeds the residual bits they save.</p>
 </div>
+
+<p>The same accounting compares two hypotheses directly. If \( H_1 \) needs 30 bits to specify and assigns the observed data probability \( 2^{-10} \), its total is \( 30 + 10 = 40 \) bits. If \( H_2 \) needs only 12 bits but assigns probability \( 2^{-35} \), its total is \( 47 \). The <em>simpler</em> hypothesis loses by 7 bits &mdash; odds of \( 2^7 = 128 \) to 1 against it. Simplicity is charged in the same currency as fit, and the sum decides.</p>
 
 <div class="drill">
 <span class="label">Drill 10.1</span>
-<p>A 70B model has \( L = 80 \) layers, \( H_{kv} = 8 \), \( d_{\text{head}} = 128 \), half precision. (a) Give the cache bytes per token. (b) At batch 4, what context length fills 40 GB?</p>
-<details><summary>Show answers</summary>
-<p>(a) \( 2 \times 80 \times 8 \times 128 \times 2 = 327{,}680 \) bytes, about 0.33 MB per token. (b) \( 40\times10^9 / (4 \times 3.28\times10^5) \approx 30{,}500 \) tokens.</p>
+<p>Hypothesis A is a 15-bit program with likelihood \( 2^{-4} \). Hypothesis B is a 5-bit program with likelihood \( 2^{-k} \). What is the largest integer \( k \) for which B is still preferred?</p>
+<details><summary>Show answer</summary>
+<p>A totals \( 15 + 4 = 19 \). B totals \( 5 + k \), which must be under 19, so \( k \le 13 \).</p>
 </details>
 </div>
 
-<h2>10.2 The roofline: which resource is binding</h2>
-<p>Whether a computation is limited by arithmetic or by memory is settled by comparing two ratios. The <em>arithmetic intensity</em> of a computation is the number of operations it performs per byte it moves. The <em>ridge point</em> of a machine is its peak operation rate divided by its bandwidth. Below the ridge, you are memory-bound; above it, compute-bound.</p>
-
-<p>Try predicting the number first. On a machine that can do three hundred trillion operations per second, what fraction of that capacity do you suppose a large model uses while writing text one word at a time? Most people guess something like half, or a quarter if they are being pessimistic. The real figure is below one percent, and seeing exactly why will change how you read every performance claim in this field.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 10.2</span>
-<p class="title">Why decode sits far below the ridge</p>
-<p>Our reference machine has ridge point \( 312\times10^{12} / 2\times10^{12} = \) <span class="keynum">156</span> operations per byte.</p>
-<p>A large square matrix multiply performs \( n^3 \) operations while moving about \( 3n^2 \) values, an intensity of roughly \( n/3 \) &mdash; for large \( n \) this sits comfortably above the ridge, so prefill is compute-bound.</p>
-<p>Batch-1 decode is the opposite. Producing one token performs about \( 2N \) operations (one multiply&ndash;add per parameter) while moving about \( 2N \) bytes (reading every parameter once in half precision). The intensity is about <strong>1 operation per byte</strong> &mdash; a factor of 156 below the ridge. Decoding uses well under one percent of the machine's arithmetic capability.</p>
-<p>Batching \( B \) requests reuses each weight read \( B \) times, so the intensity rises to roughly \( B \). You approach compute-bound only near \( B \approx 156 \) &mdash; which is precisely why serving systems are obsessed with batch size.</p>
-</div>
+<h2>10.2 Cross-entropy is a file size</h2>
+<p>The connection between prediction and compression is not a metaphor. When a model assigns probability \( q \) to the token that actually occurs, an optimal code spends \( -\log_2 q \) bits encoding it. The average of that quantity over a corpus is the cross-entropy, so a model's cross-entropy in bits per token is <em>literally</em> the per-token size of the compressed corpus.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 10.2</span>
-<p class="title">The decode speed limit</p>
-<p>A 7B model in half precision holds 14 GB of weights, all of which must be read to emit one token. The ceiling is therefore</p>
-\[ \frac{2\text{ TB/s}}{14\text{ GB}} = \frac{2\times10^{12}}{1.4\times10^{10}} \approx \textbf{143 tokens per second}, \]
-<p>no matter how fast the arithmetic units are. Doubling the machine's FLOP rate changes nothing; halving the bytes per weight doubles the ceiling. This single division reframes what &ldquo;a faster model&rdquo; means.</p>
+<p class="title">A corpus, in gigabytes</p>
+<p>A corpus of \( 23 \) billion tokens is modeled at a cross-entropy of \( 1.6 \) bits per token. The compressed size is \( 23\times 10^9 \times 1.6 = 36.8\times 10^9 \) bits, and dividing by \( 8\times 10^9 \) bits per gigabyte gives <span class="keynum">4.6 GB</span>. Improving the model to 1.4 bits per token would shrink the same corpus to 4.0 GB. Every gain in predictive quality is, exactly and measurably, a gain in compression.</p>
 </div>
+
+<h2>10.3 Paying for precision</h2>
+<p>A subtler costume: how many bits does a single weight cost? If we transmit weights not as exact numbers but as a distribution &mdash; a posterior \( \mathcal{N}(\mu, \sigma_q^2) \) against a shared prior \( \mathcal{N}(0, \sigma_p^2) \) &mdash; the cost is the Kullback&ndash;Leibler divergence between them,</p>
+\[ D_{\mathrm{KL}} = \ln\frac{\sigma_p}{\sigma_q} + \frac{\sigma_q^2 + \mu^2}{2\sigma_p^2} - \frac{1}{2} \quad\text{nats}. \]
+<p>Three readings of this formula matter more than the formula itself. When the posterior equals the prior (\( \sigma_q = \sigma_p = 1, \mu = 0 \)), the cost is exactly zero: a weight you have learned nothing about is free. As \( \sigma_q \to 0 \) the first term diverges: <em>infinite precision costs infinite bits</em>. And a weight the network is content to leave noisy &mdash; large \( \sigma_q \) &mdash; is a <em>cheap</em> weight.</p>
 
 <div class="box trap">
-<span class="label">Trap &middot; T7 &middot; rate versus stock, and T9 &middot; name your budget</span>
-<p>Two errors to guard against. First, cache figures are often quoted per token and often quoted as totals, and the two differ by a factor of the context length; always state which you mean. Second &mdash; and this is a habit for all of Part III &mdash; every efficiency claim must name the budget it improves. Grouped-query attention shrinks the <em>cache</em>, not the weight read, so it helps long-context and large-batch serving but does <em>not</em> raise the batch-1 decode ceiling. &ldquo;It makes it faster&rdquo; without naming a budget is not an answer.</p>
+<span class="label">Trap &middot; T5 &middot; direction reversal</span>
+<p>Students routinely get this backwards, assuming a noisy weight must be costly. The reverse is true, and the reversal <em>is</em> the mechanism: because precision costs bits, a network under a description-length penalty buys precision only where precision buys accuracy, and lets every other weight stay blurry. That is how such a penalty produces simple models &mdash; not by removing weights, but by declining to pay for their exactness.</p>
 </div>
-
-<h2>10.3 Utilization, honestly measured</h2>
-<p>A final piece of accounting: what fraction of a machine's capability is a workload actually using? For training, the model FLOP utilization is the useful operations per second divided by peak &mdash; with \( 6N \) operations per token from Chapter 6,</p>
-\[ \text{MFU} = \frac{\text{tokens/s} \times 6N}{\text{peak FLOP/s}}. \]
-<p>A well-tuned training run reaches a substantial fraction. Decode, as Derivation 10.2 showed, cannot: its utilization is structurally terrible, because it is not limited by the resource the denominator measures. Reporting decode MFU without saying so is a way of making a memory-bound workload look like an engineering failure rather than a physical one.</p>
 
 <div class="drill">
 <span class="label">Drill 10.2</span>
-<p>A training run sustains 4200 tokens/s per accelerator on a 7B model. What is its MFU on the reference machine?</p>
+<p>Compute the coding cost for \( \sigma_p = 1 \), \( \sigma_q = 0.1 \), \( \mu = 0.5 \), in nats and in bits. (Use \( \ln 10 = 2.303 \), and 1 nat = 1.4427 bits.)</p>
 <details><summary>Show answer</summary>
-<p>\( 4200 \times 6 \times 7\times10^9 = 1.76\times10^{14} \) FLOP/s \( = 176 \) TFLOP/s. Divided by 312: <strong>56%</strong>.</p>
+<p>\( \ln(1/0.1) + \frac{0.01 + 0.25}{2} - 0.5 = 2.303 + 0.13 - 0.5 = 1.933 \) nats \( = 1.933 \times 1.4427 = 2.79 \) bits.</p>
 </details>
 </div>
 
-<h2>10.4 What the chapter bought</h2>
-<p>You can now price a deployed model with three formulas, and none of them counts a floating-point operation. The cache size, linear in context and often larger than the weights. The roofline, which places batch-1 decode a hundred and fifty times below the point where arithmetic matters. And the decode ceiling, bandwidth divided by weight bytes, which says what a model can possibly emit per second. Together they explain why the modern era's optimizations target bytes rather than operations &mdash; and Chapter 11 takes up the two most elegant examples: an attention kernel that does more arithmetic to move less memory, and a decoding scheme that buys parallelism from a cheap draft model while provably changing nothing about the output.</p>
+<h2>10.4 Occam's razor as a theorem</h2>
+<p>Now the deepest costume. Chapter 1 introduced the Kraft inequality: a set of prefix-free descriptions with lengths \( \ell_i \) satisfies \( \sum_i 2^{-\ell_i} \le 1 \). Read in reverse, this licenses treating \( 2^{-\ell} \) as a <em>probability</em> assigned to a description of length \( \ell \). That single move converts a preference for simplicity into a consequence of probability theory.</p>
+
+<p>Here is the step that surprises people. We are about to conclude that shorter explanations are more probable &mdash; not as a working assumption, not as a scientific convention, but as an arithmetic consequence. If that sounds like it must be smuggling something in, look carefully at what actually gets assumed. It is only that descriptions are written in a code no description of which is a prefix of another. Everything else follows.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 10.1</span>
+<p class="title">Every extra bit halves the vote</p>
+<p>Suppose several programs are each perfectly consistent with the data observed so far, so their likelihoods are all 1. Under the prior \( P(p) = 2^{-\ell(p)} \), their posterior weights are proportional to \( 2^{-\ell} \). Comparing two programs of lengths \( \ell_1 < \ell_2 \), their posterior ratio is \( 2^{\ell_2 - \ell_1} \): <em>each additional bit of description length halves a program's share of belief.</em> No preference for simplicity was assumed; it fell out of the length prior.</p>
+<p>To predict, mix the programs by their weights. Take three consistent programs of lengths 8, 12, and 20 bits, predicting the next bit as 1, 0, and 1 respectively. Scale all weights by \( 2^{20} \) to work in integers: they become \( 2^{12} = 4096 \), \( 2^{8} = 256 \), and \( 1 \), totaling 4353. The programs predicting 1 hold \( 4096 + 1 = 4097 \), so</p>
+\[ P(\text{next bit} = 1) = \frac{4097}{4353} = 0.941. \]
+<p>The 20-bit program holds \( 1/4353 = 0.023\% \) of the belief &mdash; twelve extra bits have reduced it by a factor of 4096. Equal fit does not mean equal belief.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 10.3</span>
+<p>In the setting above, suppose the shortest program were 16 bits instead of 8 (others unchanged). Recompute \( P(\text{next bit} = 1) \).</p>
+<details><summary>Show answer</summary>
+<p>Weights scaled by \( 2^{20} \): \( 2^{4} = 16 \), \( 2^{8} = 256 \), \( 1 \); total 273. Programs predicting 1 hold \( 16 + 1 = 17 \), so \( P = 17/273 = 0.062 \) &mdash; now below one half, because the 12-bit program predicting 0 has become the shortest.</p>
+</details>
+</div>
+
+<h2>10.5 Typicality is not membership</h2>
+<p>A short but sharp idea. Consider the set \( M \) of all 10,000-bit strings containing exactly 5,000 ones. Its size is \( \binom{10000}{5000} \), and by the approximation of Chapter 1, \( \log_2\binom{2n}{n} \approx 2n - \tfrac12\log_2(\pi n) \), which here gives about <span class="keynum">9,993</span> bits: specifying a member takes nearly the full 10,000 bits, so a typical member is essentially incompressible.</p>
+<p>Now take the alternating string \( 0101\ldots01 \). It belongs to \( M \) &mdash; it has exactly 5,000 ones. Yet its description length is tiny: &ldquo;print 01 five thousand times&rdquo; is a few dozen bits. Its <em>randomness deficiency</em> &mdash; the gap between the bits a typical member needs and the bits this member actually needs &mdash; is nearly maximal, about 9,993 bits. The string satisfies every constraint the model imposes and is nonetheless an outrageous thing for that model to produce. Membership in a model is not typicality under it, and conflating the two is how one fails to notice a black swan.</p>
+
+<h2>10.6 Two puzzles the framework dissolves</h2>
+<p><strong>Grokking.</strong> A network trained on a rule-like task sometimes memorizes first and only much later &mdash; abruptly &mdash; discovers the rule that generalizes. In code-length terms this is unmysterious. Suppose memorizing 1,000 examples at 10 bits each costs 10,000 bits, while the general rule costs 500 bits: the transition is a twentyfold compression. Both solutions sit at zero training error, so <em>the training loss is silent about the transition</em> &mdash; but the description length is not, and neither is the test accuracy. Delayed generalization is a search finding the short code late.</p>
+<p><strong>Double descent.</strong> Classical wisdom says test error traces a U as model size grows. Modern practice sees it fall, rise to a peak, and fall again past the point where the model can interpolate the training data. The peak is quantifiable. For least squares with \( p \) parameters and \( n \) samples (\( p < n-1 \)) at noise variance \( \sigma^2 \), the expected excess test risk is \( \sigma^2 p/(n-p-1) \) &mdash; take this as given. As \( p \to n-1 \) the denominator vanishes and the risk diverges: at the interpolation threshold there is effectively one interpolating solution, and it is maximally sensitive to noise. Past the threshold many interpolating solutions exist, an optimizer biased toward small norm can select a simple one, and the risk falls again.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 10.3</span>
+<p class="title">The approach to the threshold</p>
+<p>With \( n = 100 \) samples and \( \sigma^2 = 1 \), compare the excess risk at \( p = 50 \) and \( p = 90 \). At \( p = 50 \): \( 50/(100-50-1) = 50/49 = 1.02 \). At \( p = 90 \): \( 90/(100-90-1) = 90/9 = 10 \). The ratio is <span class="keynum">9.8</span>. Adding parameters near the threshold is not mildly harmful; it is catastrophic &mdash; and yet pushing further past it recovers.</p>
+</div>
+
+<h2>10.7 Compression and the measure of intelligence</h2>
+<p>The chapter's last costume applies description length to agents rather than models. If we score an agent's performance \( V_i \in [0,1] \) across many environments, how should the environments be weighted? Weighting each by \( 2^{-K_i} \), where \( K_i \) is the environment's description complexity, gives</p>
+\[ \Upsilon = \sum_i 2^{-K_i} V_i. \]
+<p>Three properties follow immediately. By Kraft, \( \Upsilon \le 1 \) for any agent. An agent competent only in very complex environments scores near zero, because \( 2^{-K} \) decimates them: <em>Occam is built into the definition of intelligence itself.</em> And adding one bit to every environment's complexity halves \( \Upsilon \) exactly.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 10.4</span>
+<p class="title">Scoring an agent, and a caution about rewards</p>
+<p>An agent scores \( V = 0.5, 0.9, 0.3 \) in environments of complexity \( K = 1, 2, 3 \) bits. Then \( \Upsilon = \tfrac12(0.5) + \tfrac14(0.9) + \tfrac18(0.3) = 0.25 + 0.225 + 0.0375 = \) <span class="keynum">0.51</span>.</p>
+<p>A related calculation, using Chapter 1's geometric series, prices a temptation. An agent discounting the future at \( \gamma = 0.95 \) values a perpetual per-step reward \( r \) at \( \gamma r/(1-\gamma) = 19r \). This beats a one-time reward of 1 whenever \( r > 1/19 = \) <span class="keynum">0.053</span>. A trickle worth barely five percent of the one-off prize is already preferable &mdash; which is why an agent able to seize its own reward channel finds doing so overwhelmingly attractive, and why the reward source must be kept outside the agent's control.</p>
+</div>
+
+<h2>10.8 What the chapter bought</h2>
+<p>Everything above was the same sentence in different clothes: total code length decides. It selects models and exposes overfitting as arithmetic; it makes cross-entropy a literal file size; it prices a weight's precision and thereby explains how simplicity is bought; it converts Occam's razor from a preference into a theorem via the length prior; it distinguishes membership from typicality; and it dissolves grokking and double descent into statements about which code is short and how many solutions exist. Part II ends here. Part III turns to the modern era, and it opens with a shift in what is scarce: not the compute to train a model, but the bytes and bandwidth to serve one.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A model has \( L = 48 \), \( H_{kv} = 16 \), \( d_{\text{head}} = 128 \), half precision. Give the cache bytes per token.</li>
-<li>Give the ridge point of a machine with 500 TFLOP/s and 3 TB/s.</li>
-<li>A 13B model in half precision: give the batch-1 decode ceiling on the reference machine.</li>
-<li>The same 13B model quantized to 4 bits per weight: give the new ceiling.</li>
+<li>Four prefix-free programs have lengths 1, 2, 3, 3 bits. What total prior mass do they carry, and what does that tell you about the code?</li>
+<li>A corpus of 8 billion tokens is modeled at 2.0 bits/token. Give the compressed size in GB.</li>
+<li>Two hypotheses total 22 and 29 bits. By what odds is the first preferred?</li>
+<li>Compute \( \Upsilon \) for \( V = (1.0, 0.5) \) in environments of complexity \( K = (2, 3) \).</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Sizing a deployment.</strong> A 70B model in half precision serves at context 8192, batch 16, with \( L = 80 \), \( H_{kv} = 8 \), \( d_{\text{head}} = 128 \). Give (a) the weight memory, (b) the total KV cache, (c) their sum, and (d) the number of 80 GB accelerators required. State which term you would attack first and why.</li>
-<li><strong>The batching crossover.</strong> Derive the arithmetic intensity of batch-\( B \) decode and show it is approximately \( B \). Find the batch size at which the reference machine becomes compute-bound, and explain what happens to per-request latency as batch size approaches it.</li>
-<li><strong>What quantization actually buys.</strong> For a 70B model, give the decode ceiling at 16, 8, and 4 bits per weight. Then state precisely which budget quantization improves and which it leaves untouched, and use that to explain why quantization speeds up decode but not prefill.</li>
+<li><strong>Model selection, fully.</strong> Each parameter costs 9 bits. Model P: 5 parameters, 300 bits of residual. Model Q: 25 parameters, 95 bits. Model R: 50 parameters, 0 bits. Give all three totals, name the MDL choice, and state by how many bits the zero-error model loses. Explain in one sentence what quantity overfitting corresponds to here.</li>
+<li><strong>The length prior in action.</strong> Four consistent programs have lengths 6, 9, 9, and 14 bits, predicting the next symbol as A, B, A, and B. Compute the posterior probability of A. Then state the general rule relating a program's extra length to its share of belief, and prove it in one line.</li>
+<li><strong>Approaching the threshold.</strong> With \( n = 200 \), \( \sigma^2 = 1 \), tabulate the excess risk at \( p = 100, 150, 190, 195 \). Describe the trend and say what it implies about model sizes near \( p \approx n \).</li>
+<li><strong>Precision is what costs.</strong> Using the Gaussian coding formula, compute the cost of a weight at \( \sigma_p = 1 \) with (a) \( \sigma_q = 0.5, \mu = 0 \); (b) \( \sigma_q = 0.05, \mu = 0 \). Explain what the comparison says about which weights a description-length penalty leaves imprecise.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Two eras, two scarcities.</strong> Chapter 6 minimized loss subject to a budget of operations; this chapter argues bytes are what bind at serving time. Construct a scenario in which the compute-optimal model of Chapter 6 is the <em>wrong</em> model to deploy, quantify the disagreement using this chapter's formulas, and state what additional term the objective would need for the two chapters to agree. (You are deriving, in outline, the argument Chapter 16 completes.)</li>
+<li><strong>One currency, eight costumes.</strong> This chapter presented model selection, hypothesis odds, weight precision, cross-entropy-as-file-size, the length prior, typicality, grokking, and double descent. For each, state precisely what plays the role of &ldquo;model bits&rdquo; and what plays the role of &ldquo;residual bits,&rdquo; or explain why one of the two is absent. Then argue in a paragraph why a single principle can wear this many disguises &mdash; and what that suggests about how to read a new result in the field.</li>
 </ol>
 </div>
 
 <div class="gate">
-<span class="label">Gate 10 &middot; Pass before Chapter 11</span>
-<p>Reproduce Derivations 10.1 (cache size, with the factor of 2 and the right head count) and 10.2 (intensities and the ridge point) on blank paper, and produce the 143-tokens-per-second ceiling from nothing. Attempt B-1 and B-3 closed book. You pass when you instinctively ask &ldquo;which budget?&rdquo; of every optimization claim.</p>
+<span class="label">Gate 10 &middot; Pass before Chapter 11 &mdash; and before Part III</span>
+<p>Reproduce Derivation 10.1 (the length prior, its halving rule, and a mixture prediction) on blank paper. Work Worked Example 10.1 from a blank table and B-1 closed book. Then, as the Part II capstone, sweep the whole Derivation Bank so far &mdash; every result from Chapters 3 through 10 &mdash; reproducing each from nothing. Part III assumes all of it.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 10</h4>
 <ul>
-<li><a href="https://kipp.ly/transformer-inference-arithmetic/">Kipply, <em>Transformer Inference Arithmetic</em></a><span class="how">The canonical treatment of this chapter's material. Recompute every number in it yourself.</span></li>
-<li><a href="https://arxiv.org/abs/2211.05102">Pope et al., <em>Efficiently Scaling Transformer Inference</em> (2022)</a><span class="how">Sections 2&ndash;3. The systems view of the roofline argument, with real partitioning strategies.</span></li>
-<li><a href="https://arxiv.org/abs/2305.13245">Ainslie et al., <em>GQA: Grouped-Query Attention</em> (2023)</a> and <a href="https://arxiv.org/abs/1911.02150">Shazeer, <em>Fast Transformer Decoding</em> (2019)</a><span class="how">The cache reduction of Worked Example 10.1; note carefully which budget each improves.</span></li>
-<li><a href="https://jax-ml.github.io/scaling-book/inference/">Austin et al., <em>How to Scale Your Model</em> &mdash; inference chapter</a><span class="how">Pairs directly with this chapter; work its rooflines alongside Derivation 10.2.</span></li>
+<li><a href="https://arxiv.org/abs/math/0406077">Gr&uuml;nwald, <em>A Tutorial Introduction to the Minimum Description Length Principle</em> (2004)</a><span class="how">Sections 1&ndash;2. The polynomial-fitting figure is the ancestor of Worked Example 10.1.</span></li>
+<li><a href="https://www.cs.toronto.edu/~hinton/absps/colt93.pdf">Hinton &amp; van Camp, <em>Keeping Neural Networks Simple by Minimizing the Description Length of the Weights</em> (1993)</a><span class="how">The origin of Section 10.3; read it as the paper that priced precision in bits.</span></li>
+<li><a href="https://arxiv.org/abs/2201.02177">Power et al., <em>Grokking: Generalization Beyond Overfitting</em> (2022)</a><span class="how">The phenomenon of Section 10.6; note that the training curve is flat exactly as the code-length account predicts.</span></li>
+<li><a href="https://arxiv.org/abs/1912.02292">Nakkiran et al., <em>Deep Double Descent</em> (2019)</a> and <a href="https://arxiv.org/abs/1812.11118">Belkin et al., <em>Reconciling Modern Machine Learning and the Bias&ndash;Variance Trade-off</em> (2018)</a><span class="how">The second descent, measured and explained; check their peaks against your risk formula.</span></li>
+<li><a href="https://www.vetta.org/documents/Machine_Super_Intelligence.pdf">Legg, <em>Machine Super Intelligence</em> (2008)</a><span class="how">Chapters 2&ndash;4 for the measure of Section 10.7 and the reward-channel argument.</span></li>
+<li><a href="https://www.newyorker.com/tech/annals-of-technology/chatgpt-is-a-blurry-jpeg-of-the-web">Chiang, <em>ChatGPT Is a Blurry JPEG of the Web</em> (2023)</a><span class="how">Read last, then write one paragraph on where the compression metaphor is right and where this chapter corrects it.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 10 &middot; The Price of a Token</span>
-  <span><a href="chapter-11.html">Next: Bytes over FLOPs &rarr;</a></span>
+  <span>Chapter 10 &middot; Compression and Occam</span>
+  <span><a href="chapter-11.html">Next: The Price of a Token &rarr;</a></span>
 </footer>
 
 </div>

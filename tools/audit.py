@@ -237,8 +237,8 @@ for num, tag in entries:
         per_chapter[c] += 1
 for p in chapters:
     n = int(p.stem[-2:])
-    if n == 1:
-        continue  # Part I is a toolkit, not bank material
+    if n <= 2:
+        continue  # Part I is toolkit and vocabulary, not bank material
     if per_chapter[n] == 0:
         bad(f"chapter {n} has no entry in the derivation bank")
         continue

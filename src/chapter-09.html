@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 9 · Compression and Occam — The Arithmetic of Intelligence</title>
+<title>Chapter 9 · Measurement — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,162 +24,117 @@
 
 <header class="opener">
   <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 9</span>
-  <h1 class="ch">Compression and Occam</h1>
-  <p class="ch-blurb">Underneath every result so far lies one currency: description length. Learning is compression, simplicity is a probability, and Occam's razor is not a preference but a theorem.</p>
+  <h1 class="ch">Measurement</h1>
+  <p class="ch-blurb">A capability that appears suddenly, a benchmark score that leaps &mdash; these are among the most misread phenomena in the field. Two small calculations show how much of the drama lives in the ruler rather than the model.</p>
 </header>
 
-<p class="lead">&ldquo;A model that predicts well compresses well.&rdquo; That sounds like a metaphor, or at best an analogy. It is neither. It is an identity, and you can compute both sides of it. Once you take it literally, a surprising amount of what the earlier chapters treated separately &mdash; overfitting, generalization, why simple explanations deserve preference &mdash; turns out to be one subject measured in one unit.</p>
-<p>The organizing principle has one sentence: <strong>total code length equals model bits plus residual bits, and the smallest total wins.</strong> Everything in this chapter is that sentence in a different costume &mdash; selecting among models, weighing two hypotheses, pricing the precision of a weight, reading a cross-entropy as a file size, or assigning belief to competing programs. We take them in turn.</p>
+<p class="lead">Here is a claim you will meet often: a model was scaled up, and at some size an ability it did not have simply appeared. It is a striking claim, and sometimes true. But before you believe it about any particular benchmark, there are two calculations to run &mdash; and they will frequently show that what changed was not the model but the ruler held against it.</p>
+<p>Two calculations do the work. The first shows how a smoothly improving model can produce a sharp jump on a benchmark that scores exact matches. The second shows how contamination &mdash; test items seen during training &mdash; inflates observed accuracy, and how to invert the inflation. Neither requires anything past Chapter 1.</p>
 
-<h2>9.1 Minimum description length</h2>
-<p>To communicate a dataset to someone who has neither, you may send a model and then the residuals &mdash; the corrections the model fails to predict. A complex model costs more to send but leaves smaller residuals; a simple one costs little but leaves much unexplained. The <em>minimum description length</em> principle says: choose the model minimizing the total.</p>
+<h2>9.1 Emergence as a property of the ruler</h2>
+<p>Suppose a model performs a task with \( k \) independent parts &mdash; adding two \( k \)-digit numbers, say &mdash; and gets each part right with probability \( p \). If the benchmark scores an <em>exact match</em>, awarding credit only when all \( k \) parts are correct, then the measured accuracy is \( p^k \). Now watch what a smooth improvement in \( p \) does to \( p^k \).</p>
+
+<p>Do this one on paper as you read. Pick a per-part accuracy of 0.9 and eight parts. Before computing, write down whether you expect the exact-match score to be closer to 0.9 or closer to 0.5. Nearly everyone writes something in the eighties or nineties, because 0.9 feels high and eight feels small. The answer is 0.43, and the size of that surprise is precisely the size of the illusion this section is about.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 9.1</span>
+<p class="title">A cliff manufactured from a slope</p>
+<p>Exact-match accuracy is \( p^k \). As a function of the underlying per-part skill \( p \), this is smooth &mdash; but for large \( k \) it is nearly flat at low \( p \) and rises steeply near \( p = 1 \), because raising a number just below one to a high power collapses it, while raising a number near one preserves it. The 50% point sits where \( p^k = \tfrac12 \), i.e. at \( p = 2^{-1/k} \), which increases toward 1 as \( k \) grows.</p>
+<p>Concretely, take \( k = 8 \). At \( p = 0.67 \), exact-match accuracy is \( 0.67^8 = e^{8\ln 0.67} = e^{-3.20} = 0.041 \) &mdash; about 4%. At \( p = 0.90 \), it is \( 0.90^8 = e^{-0.843} = 0.43 \) &mdash; about 43%. A modest, smooth improvement in per-digit skill, from \( 0.67 \) to \( 0.90 \), produces a tenfold leap on the benchmark. The model got steadily better; the benchmark reported a sudden emergence.</p>
+</div>
 
 <div class="box worked">
 <span class="label">Worked Example 9.1</span>
-<p class="title">The zero-error model loses</p>
-<p>Each parameter costs 12 bits to encode. Three candidates fit the same data:</p>
-<ul>
-<li><strong>Model A</strong>: 3 parameters, residuals need 480 bits. Total \( 36 + 480 = 516 \).</li>
-<li><strong>Model B</strong>: 20 parameters, residuals need 190 bits. Total \( 240 + 190 = \) <span class="keynum">430</span>.</li>
-<li><strong>Model C</strong>: 60 parameters, residuals need 0 bits &mdash; it fits the training data perfectly. Total \( 720 + 0 = 720 \).</li>
-</ul>
-<p>MDL selects <strong>B</strong> at 430 bits. Note what happened to Model C: it achieves zero training error and is the <em>worst</em> of the three, losing by 290 bits. Overfitting, usually described in words, is here a number &mdash; the price of the parameters exceeds the residual bits they save.</p>
+<p class="title">Where the cliff appears to fall</p>
+<p>Tabulate exact-match accuracy \( p^k \) at \( k = 8 \) as the per-part skill improves:</p>
+<p><span class="keynum">p = 0.50 &rarr; 0.004 &nbsp;&middot;&nbsp; 0.70 &rarr; 0.058 &nbsp;&middot;&nbsp; 0.80 &rarr; 0.168 &nbsp;&middot;&nbsp; 0.90 &rarr; 0.430 &nbsp;&middot;&nbsp; 0.95 &rarr; 0.663</span></p>
+<p>Between \( p = 0.5 \) and \( p = 0.7 \) the benchmark barely moves &mdash; from under half a percent to under six. Between \( 0.8 \) and \( 0.95 \) it moves from 17% to 66%. An observer watching only this metric would report a capability that lay dormant and then arrived; an observer watching \( p \) would report steady, unremarkable progress. The apparent onset sits near the 50% frontier \( 2^{-1/8} = 0.917 \), and for larger \( k \) it sits closer to 1 and looks sharper still.</p>
 </div>
 
-<p>The same accounting compares two hypotheses directly. If \( H_1 \) needs 30 bits to specify and assigns the observed data probability \( 2^{-10} \), its total is \( 30 + 10 = 40 \) bits. If \( H_2 \) needs only 12 bits but assigns probability \( 2^{-35} \), its total is \( 47 \). The <em>simpler</em> hypothesis loses by 7 bits &mdash; odds of \( 2^7 = 128 \) to 1 against it. Simplicity is charged in the same currency as fit, and the sum decides.</p>
+<div class="box trap">
+<span class="label">Trap &middot; T4 &middot; metric versus capability</span>
+<p>An abrupt jump in a thresholded score is <em>not</em> evidence of a discontinuous change in the underlying capability. The per-part skill \( p \) &mdash; visible in a smooth metric like per-token log-loss &mdash; may be improving perfectly steadily while the exact-match metric snaps upward. Before calling a capability &ldquo;emergent,&rdquo; ask whether the ruler is a threshold on many smoothly-improving parts. Much reported emergence survives this test poorly.</p>
+</div>
 
 <div class="drill">
 <span class="label">Drill 9.1</span>
-<p>Hypothesis A is a 15-bit program with likelihood \( 2^{-4} \). Hypothesis B is a 5-bit program with likelihood \( 2^{-k} \). What is the largest integer \( k \) for which B is still preferred?</p>
+<p>A model does \( k \)-digit exact-match addition with per-digit accuracy \( p = 0.98 \). What is the largest \( k \) for which exact-match accuracy stays at or above 50%?</p>
 <details><summary>Show answer</summary>
-<p>A totals \( 15 + 4 = 19 \). B totals \( 5 + k \), which must be under 19, so \( k \le 13 \).</p>
+<p>Need \( 0.98^k \ge 0.5 \), i.e. \( k \le \ln(0.5)/\ln(0.98) = (-0.693)/(-0.0202) = 34.3 \). Largest integer \( k = 34 \).</p>
 </details>
 </div>
 
-<h2>9.2 Cross-entropy is a file size</h2>
-<p>The connection between prediction and compression is not a metaphor. When a model assigns probability \( q \) to the token that actually occurs, an optimal code spends \( -\log_2 q \) bits encoding it. The average of that quantity over a corpus is the cross-entropy, so a model's cross-entropy in bits per token is <em>literally</em> the per-token size of the compressed corpus.</p>
+<h2>9.2 Contamination: when the benchmark has been seen</h2>
+<p>A subtler distortion is contamination: some fraction of the test items appeared in the training data, so the model answers them from memory rather than skill. This inflates the observed score, and a two-line model lets us both quantify and invert the inflation.</p>
 
-<div class="box worked">
-<span class="label">Worked Example 9.2</span>
-<p class="title">A corpus, in gigabytes</p>
-<p>A corpus of \( 23 \) billion tokens is modeled at a cross-entropy of \( 1.6 \) bits per token. The compressed size is \( 23\times 10^9 \times 1.6 = 36.8\times 10^9 \) bits, and dividing by \( 8\times 10^9 \) bits per gigabyte gives <span class="keynum">4.6 GB</span>. Improving the model to 1.4 bits per token would shrink the same corpus to 4.0 GB. Every gain in predictive quality is, exactly and measurably, a gain in compression.</p>
-</div>
-
-<h2>9.3 Paying for precision</h2>
-<p>A subtler costume: how many bits does a single weight cost? If we transmit weights not as exact numbers but as a distribution &mdash; a posterior \( \mathcal{N}(\mu, \sigma_q^2) \) against a shared prior \( \mathcal{N}(0, \sigma_p^2) \) &mdash; the cost is the Kullback&ndash;Leibler divergence between them,</p>
-\[ D_{\mathrm{KL}} = \ln\frac{\sigma_p}{\sigma_q} + \frac{\sigma_q^2 + \mu^2}{2\sigma_p^2} - \frac{1}{2} \quad\text{nats}. \]
-<p>Three readings of this formula matter more than the formula itself. When the posterior equals the prior (\( \sigma_q = \sigma_p = 1, \mu = 0 \)), the cost is exactly zero: a weight you have learned nothing about is free. As \( \sigma_q \to 0 \) the first term diverges: <em>infinite precision costs infinite bits</em>. And a weight the network is content to leave noisy &mdash; large \( \sigma_q \) &mdash; is a <em>cheap</em> weight.</p>
-
-<div class="box trap">
-<span class="label">Trap &middot; T5 &middot; direction reversal</span>
-<p>Students routinely get this backwards, assuming a noisy weight must be costly. The reverse is true, and the reversal <em>is</em> the mechanism: because precision costs bits, a network under a description-length penalty buys precision only where precision buys accuracy, and lets every other weight stay blurry. That is how such a penalty produces simple models &mdash; not by removing weights, but by declining to pay for their exactness.</p>
+<div class="box deriv">
+<span class="label">Derivation 9.2</span>
+<p class="title">Solving for the leak, then flipping it with Bayes</p>
+<p>Let a fraction \( c \) of test items be contaminated &mdash; answered correctly with probability 1 &mdash; while on the clean fraction \( 1-c \) the model's true accuracy is \( p \). The observed accuracy is the mixture</p>
+\[ \text{observed} = c\cdot 1 + (1-c)\,p = c + p(1-c). \]
+<p>Given an observed score and a known (or assumed) clean accuracy, solve for \( c \). Suppose observed \( = 0.70 \) and clean accuracy \( p = 0.60 \): then \( 0.70 = c + 0.60(1-c) = 0.60 + 0.40c \), so \( c = 0.25 \). A quarter of the benchmark leaked, and the observed score overstates true skill by ten points.</p>
+<p>Now the more revealing question: given that an item was answered correctly, what is the probability it was contaminated? By Bayes' rule, contaminated items contribute \( c \times 1 \) to the correct-answer mass, out of a total correct mass equal to the observed accuracy:</p>
+\[ P(\text{contaminated}\mid\text{correct}) = \frac{c}{\text{observed}} = \frac{0.25}{0.70} = 0.357. \]
+<p>Over a third of the model's apparent successes are memory, not skill. This is the calculation to run whenever a headline score seems too good &mdash; and it is nothing more than the Bayes flip of Chapter 1.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 9.2</span>
-<p>Compute the coding cost for \( \sigma_p = 1 \), \( \sigma_q = 0.1 \), \( \mu = 0.5 \), in nats and in bits. (Use \( \ln 10 = 2.303 \), and 1 nat = 1.4427 bits.)</p>
-<details><summary>Show answer</summary>
-<p>\( \ln(1/0.1) + \frac{0.01 + 0.25}{2} - 0.5 = 2.303 + 0.13 - 0.5 = 1.933 \) nats \( = 1.933 \times 1.4427 = 2.79 \) bits.</p>
+<p>A benchmark shows observed accuracy 0.85; the model's clean accuracy is believed to be 0.75. (a) What contamination fraction \( c \) explains the gap? (b) Given a correct answer, what is the probability it was contaminated?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 0.85 = c + 0.75(1-c) = 0.75 + 0.25c \Rightarrow c = 0.40 \). (b) \( P = c/\text{observed} = 0.40/0.85 = 0.47 \).</p>
 </details>
 </div>
 
-<h2>9.4 Occam's razor as a theorem</h2>
-<p>Now the deepest costume. Chapter 1 introduced the Kraft inequality: a set of prefix-free descriptions with lengths \( \ell_i \) satisfies \( \sum_i 2^{-\ell_i} \le 1 \). Read in reverse, this licenses treating \( 2^{-\ell} \) as a <em>probability</em> assigned to a description of length \( \ell \). That single move converts a preference for simplicity into a consequence of probability theory.</p>
+<h2>9.3 Voting, briefly</h2>
+<p>One more measurement idea belongs here, though Chapter 15 develops it fully: taking the majority vote of several independent attempts. We met the calculation in Chapter 1 &mdash; five chains at \( p = 0.6 \) vote correctly with probability \( 0.68 \). The one fact to carry forward is that voting helps only when the single-attempt probability already exceeds one half; below that threshold, the majority amplifies the error instead of correcting it. Voting sharpens a capability that is already there; it does not manufacture one. That distinction &mdash; sharpening versus creating &mdash; is exactly the metric-versus-capability theme of this chapter in another guise.</p>
 
-<p>Here is the step that surprises people. We are about to conclude that shorter explanations are more probable &mdash; not as a working assumption, not as a scientific convention, but as an arithmetic consequence. If that sounds like it must be smuggling something in, look carefully at what actually gets assumed. It is only that descriptions are written in a code no description of which is a prefix of another. Everything else follows.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 9.1</span>
-<p class="title">Every extra bit halves the vote</p>
-<p>Suppose several programs are each perfectly consistent with the data observed so far, so their likelihoods are all 1. Under the prior \( P(p) = 2^{-\ell(p)} \), their posterior weights are proportional to \( 2^{-\ell} \). Comparing two programs of lengths \( \ell_1 < \ell_2 \), their posterior ratio is \( 2^{\ell_2 - \ell_1} \): <em>each additional bit of description length halves a program's share of belief.</em> No preference for simplicity was assumed; it fell out of the length prior.</p>
-<p>To predict, mix the programs by their weights. Take three consistent programs of lengths 8, 12, and 20 bits, predicting the next bit as 1, 0, and 1 respectively. Scale all weights by \( 2^{20} \) to work in integers: they become \( 2^{12} = 4096 \), \( 2^{8} = 256 \), and \( 1 \), totaling 4353. The programs predicting 1 hold \( 4096 + 1 = 4097 \), so</p>
-\[ P(\text{next bit} = 1) = \frac{4097}{4353} = 0.941. \]
-<p>The 20-bit program holds \( 1/4353 = 0.023\% \) of the belief &mdash; twelve extra bits have reduced it by a factor of 4096. Equal fit does not mean equal belief.</p>
-</div>
-
-<div class="drill">
-<span class="label">Drill 9.3</span>
-<p>In the setting above, suppose the shortest program were 16 bits instead of 8 (others unchanged). Recompute \( P(\text{next bit} = 1) \).</p>
-<details><summary>Show answer</summary>
-<p>Weights scaled by \( 2^{20} \): \( 2^{4} = 16 \), \( 2^{8} = 256 \), \( 1 \); total 273. Programs predicting 1 hold \( 16 + 1 = 17 \), so \( P = 17/273 = 0.062 \) &mdash; now below one half, because the 12-bit program predicting 0 has become the shortest.</p>
-</details>
-</div>
-
-<h2>9.5 Typicality is not membership</h2>
-<p>A short but sharp idea. Consider the set \( M \) of all 10,000-bit strings containing exactly 5,000 ones. Its size is \( \binom{10000}{5000} \), and by the approximation of Chapter 1, \( \log_2\binom{2n}{n} \approx 2n - \tfrac12\log_2(\pi n) \), which here gives about <span class="keynum">9,993</span> bits: specifying a member takes nearly the full 10,000 bits, so a typical member is essentially incompressible.</p>
-<p>Now take the alternating string \( 0101\ldots01 \). It belongs to \( M \) &mdash; it has exactly 5,000 ones. Yet its description length is tiny: &ldquo;print 01 five thousand times&rdquo; is a few dozen bits. Its <em>randomness deficiency</em> &mdash; the gap between the bits a typical member needs and the bits this member actually needs &mdash; is nearly maximal, about 9,993 bits. The string satisfies every constraint the model imposes and is nonetheless an outrageous thing for that model to produce. Membership in a model is not typicality under it, and conflating the two is how one fails to notice a black swan.</p>
-
-<h2>9.6 Two puzzles the framework dissolves</h2>
-<p><strong>Grokking.</strong> A network trained on a rule-like task sometimes memorizes first and only much later &mdash; abruptly &mdash; discovers the rule that generalizes. In code-length terms this is unmysterious. Suppose memorizing 1,000 examples at 10 bits each costs 10,000 bits, while the general rule costs 500 bits: the transition is a twentyfold compression. Both solutions sit at zero training error, so <em>the training loss is silent about the transition</em> &mdash; but the description length is not, and neither is the test accuracy. Delayed generalization is a search finding the short code late.</p>
-<p><strong>Double descent.</strong> Classical wisdom says test error traces a U as model size grows. Modern practice sees it fall, rise to a peak, and fall again past the point where the model can interpolate the training data. The peak is quantifiable. For least squares with \( p \) parameters and \( n \) samples (\( p < n-1 \)) at noise variance \( \sigma^2 \), the expected excess test risk is \( \sigma^2 p/(n-p-1) \) &mdash; take this as given. As \( p \to n-1 \) the denominator vanishes and the risk diverges: at the interpolation threshold there is effectively one interpolating solution, and it is maximally sensitive to noise. Past the threshold many interpolating solutions exist, an optimizer biased toward small norm can select a simple one, and the risk falls again.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 9.3</span>
-<p class="title">The approach to the threshold</p>
-<p>With \( n = 100 \) samples and \( \sigma^2 = 1 \), compare the excess risk at \( p = 50 \) and \( p = 90 \). At \( p = 50 \): \( 50/(100-50-1) = 50/49 = 1.02 \). At \( p = 90 \): \( 90/(100-90-1) = 90/9 = 10 \). The ratio is <span class="keynum">9.8</span>. Adding parameters near the threshold is not mildly harmful; it is catastrophic &mdash; and yet pushing further past it recovers.</p>
-</div>
-
-<h2>9.7 Compression and the measure of intelligence</h2>
-<p>The chapter's last costume applies description length to agents rather than models. If we score an agent's performance \( V_i \in [0,1] \) across many environments, how should the environments be weighted? Weighting each by \( 2^{-K_i} \), where \( K_i \) is the environment's description complexity, gives</p>
-\[ \Upsilon = \sum_i 2^{-K_i} V_i. \]
-<p>Three properties follow immediately. By Kraft, \( \Upsilon \le 1 \) for any agent. An agent competent only in very complex environments scores near zero, because \( 2^{-K} \) decimates them: <em>Occam is built into the definition of intelligence itself.</em> And adding one bit to every environment's complexity halves \( \Upsilon \) exactly.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 9.4</span>
-<p class="title">Scoring an agent, and a caution about rewards</p>
-<p>An agent scores \( V = 0.5, 0.9, 0.3 \) in environments of complexity \( K = 1, 2, 3 \) bits. Then \( \Upsilon = \tfrac12(0.5) + \tfrac14(0.9) + \tfrac18(0.3) = 0.25 + 0.225 + 0.0375 = \) <span class="keynum">0.51</span>.</p>
-<p>A related calculation, using Chapter 1's geometric series, prices a temptation. An agent discounting the future at \( \gamma = 0.95 \) values a perpetual per-step reward \( r \) at \( \gamma r/(1-\gamma) = 19r \). This beats a one-time reward of 1 whenever \( r > 1/19 = \) <span class="keynum">0.053</span>. A trickle worth barely five percent of the one-off prize is already preferable &mdash; which is why an agent able to seize its own reward channel finds doing so overwhelmingly attractive, and why the reward source must be kept outside the agent's control.</p>
-</div>
-
-<h2>9.8 What the chapter bought</h2>
-<p>Everything above was the same sentence in different clothes: total code length decides. It selects models and exposes overfitting as arithmetic; it makes cross-entropy a literal file size; it prices a weight's precision and thereby explains how simplicity is bought; it converts Occam's razor from a preference into a theorem via the length prior; it distinguishes membership from typicality; and it dissolves grokking and double descent into statements about which code is short and how many solutions exist. Part II ends here. Part III turns to the modern era, and it opens with a shift in what is scarce: not the compute to train a model, but the bytes and bandwidth to serve one.</p>
+<h2>9.4 What the chapter bought</h2>
+<p>A benchmark can mislead in two quite different ways, and this chapter priced both. Exact-match scoring turns a smooth improvement in per-part skill into an apparent cliff, and the 50% frontier \( p = 2^{-1/k} \) tells you where the cliff will seem to fall. Contamination inflates a score by \( c + p(1-c) \), and Bayes' rule reveals how much of the model's success is memory. Both are warnings to measure the ruler before trusting the miracle &mdash; a habit that separates careful readers of the field from credulous ones. Chapter 10 closes Part II by descending to the idea beneath all of this: that learning is compression, that simplicity is a probability, and that a single length prior turns Occam's razor from a preference into a theorem.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>Four prefix-free programs have lengths 1, 2, 3, 3 bits. What total prior mass do they carry, and what does that tell you about the code?</li>
-<li>A corpus of 8 billion tokens is modeled at 2.0 bits/token. Give the compressed size in GB.</li>
-<li>Two hypotheses total 22 and 29 bits. By what odds is the first preferred?</li>
-<li>Compute \( \Upsilon \) for \( V = (1.0, 0.5) \) in environments of complexity \( K = (2, 3) \).</li>
+<li>A task has \( k = 5 \) independent parts, each correct with \( p = 0.9 \). Give the exact-match accuracy.</li>
+<li>At what per-part accuracy \( p \) does a \( k = 10 \) exact-match task reach 50%?</li>
+<li>Observed accuracy 0.72, clean accuracy 0.60. Find the contamination fraction.</li>
+<li>With that contamination, what fraction of correct answers are contaminated?</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Model selection, fully.</strong> Each parameter costs 9 bits. Model P: 5 parameters, 300 bits of residual. Model Q: 25 parameters, 95 bits. Model R: 50 parameters, 0 bits. Give all three totals, name the MDL choice, and state by how many bits the zero-error model loses. Explain in one sentence what quantity overfitting corresponds to here.</li>
-<li><strong>The length prior in action.</strong> Four consistent programs have lengths 6, 9, 9, and 14 bits, predicting the next symbol as A, B, A, and B. Compute the posterior probability of A. Then state the general rule relating a program's extra length to its share of belief, and prove it in one line.</li>
-<li><strong>Approaching the threshold.</strong> With \( n = 200 \), \( \sigma^2 = 1 \), tabulate the excess risk at \( p = 100, 150, 190, 195 \). Describe the trend and say what it implies about model sizes near \( p \approx n \).</li>
-<li><strong>Precision is what costs.</strong> Using the Gaussian coding formula, compute the cost of a weight at \( \sigma_p = 1 \) with (a) \( \sigma_q = 0.5, \mu = 0 \); (b) \( \sigma_q = 0.05, \mu = 0 \). Explain what the comparison says about which weights a description-length penalty leaves imprecise.</li>
+<li><strong>The shape of emergence.</strong> For an exact-match task with \( k = 8 \), tabulate accuracy at \( p = 0.5, 0.7, 0.8, 0.9, 0.95 \). Identify where the steepest rise occurs and relate it to the 50% frontier \( p = 2^{-1/k} \). Explain in two sentences why a per-token log-loss curve would show no such cliff.</li>
+<li><strong>Inverting a leak.</strong> A model reports 0.90 on a benchmark. Independent evidence suggests its true clean accuracy is 0.65. Find the implied contamination fraction, and the probability that a given correct answer came from contamination. Comment on what these numbers imply for trusting the headline score.</li>
+<li><strong>Voting's threshold.</strong> Show, for majority voting over three independent attempts, that the majority is more accurate than a single attempt if and only if the single-attempt accuracy exceeds \( \tfrac12 \). (Compute the majority accuracy \( 3p^2(1-p) + p^3 \) and compare to \( p \).)</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>One currency, eight costumes.</strong> This chapter presented model selection, hypothesis odds, weight precision, cross-entropy-as-file-size, the length prior, typicality, grokking, and double descent. For each, state precisely what plays the role of &ldquo;model bits&rdquo; and what plays the role of &ldquo;residual bits,&rdquo; or explain why one of the two is absent. Then argue in a paragraph why a single principle can wear this many disguises &mdash; and what that suggests about how to read a new result in the field.</li>
+<li><strong>Two illusions, one theme.</strong> Emergence (Section 9.1), contamination (Section 9.2), and voting (Section 9.3) are all instances of a single caution: the number you observe is a function of both the model and the measurement, and confusing the two misleads. For each of the three, identify precisely what belongs to the model, what belongs to the ruler, and what error you make if you attribute the ruler's contribution to the model. (This is trap class T4 stated in full generality.)</li>
 </ol>
 </div>
 
 <div class="gate">
-<span class="label">Gate 9 &middot; Pass before Chapter 10 &mdash; and before Part III</span>
-<p>Reproduce Derivation 9.1 (the length prior, its halving rule, and a mixture prediction) on blank paper. Work Worked Example 9.1 from a blank table and B-1 closed book. Then, as the Part II capstone, sweep the whole Derivation Bank so far &mdash; every result from Chapters 2 through 9 &mdash; reproducing each from nothing. Part III assumes all of it.</p>
+<span class="label">Gate 9 &middot; Pass before Chapter 10</span>
+<p>Reproduce Derivations 8.1 (the \( p^k \) cliff and its 50% frontier) and 8.2 (the contamination mixture and its Bayes flip) on blank paper. Attempt B-1 and B-2 closed book. You pass when you can produce the \( 0.67 \to 0.90 \) becomes \( 4\% \to 43\% \) figures and the \( c/\text{observed} \) Bayes ratio without notes.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 9</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/math/0406077">Gr&uuml;nwald, <em>A Tutorial Introduction to the Minimum Description Length Principle</em> (2004)</a><span class="how">Sections 1&ndash;2. The polynomial-fitting figure is the ancestor of Worked Example 9.1.</span></li>
-<li><a href="https://www.cs.toronto.edu/~hinton/absps/colt93.pdf">Hinton &amp; van Camp, <em>Keeping Neural Networks Simple by Minimizing the Description Length of the Weights</em> (1993)</a><span class="how">The origin of Section 9.3; read it as the paper that priced precision in bits.</span></li>
-<li><a href="https://arxiv.org/abs/2201.02177">Power et al., <em>Grokking: Generalization Beyond Overfitting</em> (2022)</a><span class="how">The phenomenon of Section 9.6; note that the training curve is flat exactly as the code-length account predicts.</span></li>
-<li><a href="https://arxiv.org/abs/1912.02292">Nakkiran et al., <em>Deep Double Descent</em> (2019)</a> and <a href="https://arxiv.org/abs/1812.11118">Belkin et al., <em>Reconciling Modern Machine Learning and the Bias&ndash;Variance Trade-off</em> (2018)</a><span class="how">The second descent, measured and explained; check their peaks against your risk formula.</span></li>
-<li><a href="https://www.vetta.org/documents/Machine_Super_Intelligence.pdf">Legg, <em>Machine Super Intelligence</em> (2008)</a><span class="how">Chapters 2&ndash;4 for the measure of Section 9.7 and the reward-channel argument.</span></li>
-<li><a href="https://www.newyorker.com/tech/annals-of-technology/chatgpt-is-a-blurry-jpeg-of-the-web">Chiang, <em>ChatGPT Is a Blurry JPEG of the Web</em> (2023)</a><span class="how">Read last, then write one paragraph on where the compression metaphor is right and where this chapter corrects it.</span></li>
+<li><a href="https://arxiv.org/abs/2206.07682">Wei et al., <em>Emergent Abilities of Large Language Models</em> (2022)</a><span class="how">The case for emergence; read it as the claim Derivation 9.1 puts to the test.</span></li>
+<li><a href="https://arxiv.org/abs/2304.15004">Schaeffer, Miranda &amp; Koyejo, <em>Are Emergent Abilities of Large Language Models a Mirage?</em> (2023)</a><span class="how">The rebuttal, built on exactly the metric argument of this chapter. Read the two papers as a debate you can now adjudicate.</span></li>
+<li><a href="https://arxiv.org/abs/2104.08758">Dodge et al., <em>Documenting the English Colossal Clean Crawled Corpus</em> (2021)</a><span class="how">On what actually ends up in training data &mdash; the empirical face of the contamination model.</span></li>
+<li><a href="https://arxiv.org/abs/1611.03530">Zhang et al., <em>Understanding Deep Learning Requires Rethinking Generalization</em> (2016)</a><span class="how">Networks can memorize random labels; the backdrop against which contamination becomes a serious worry, and a bridge to Chapter 10.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 9 &middot; Compression and Occam</span>
-  <span><a href="chapter-10.html">Next: The Price of a Token &rarr;</a></span>
+  <span>Chapter 9 &middot; Measurement</span>
+  <span><a href="chapter-10.html">Next: Compression and Occam &rarr;</a></span>
 </footer>
 
 </div>

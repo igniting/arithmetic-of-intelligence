@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 13 · Teaching Preferences — The Arithmetic of Intelligence</title>
+<title>Chapter 13 · Sparsity and Thrift — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,164 +24,137 @@
 
 <header class="opener">
   <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 13</span>
-  <h1 class="ch">Teaching Preferences</h1>
-  <p class="ch-blurb">Pretraining produces a model of what text is. Post-training bends it toward what an answer should be. The pipeline that does this collapsed, in one derivation, from a reinforcement-learning apparatus into a supervised loss.</p>
+  <h1 class="ch">Sparsity and Thrift</h1>
+  <p class="ch-blurb">Three ways to make a model cheaper: use only part of it per token, store it in fewer bits, or train only a thin slice of it. Each attacks a different budget, and saying which is the whole skill.</p>
 </header>
 
-<p class="lead">Pretraining gives you a model of what text <em>is</em>. What you usually want is a model of what a good answer <em>looks like</em>, and the two are not the same. Getting from one to the other used to require a reward model, a reinforcement-learning loop, and a second network to estimate baselines. Then someone noticed that a term in the algebra cancels, and most of that apparatus disappeared.</p>
-<p>We proceed in four stages. First, how human comparisons become a numerical score. Second, how a policy is trained against that score without drifting into nonsense. Third, the collapse itself, which removes most of the machinery the first two stages introduced. Fourth, a variant that deletes what remains of it, and which now underpins how reasoning models are trained.</p>
+<p class="lead">Three techniques in this chapter all get described with the same word: cheaper. Mixture-of-experts is cheaper. Quantization is cheaper. Low-rank adaptation is cheaper. They are cheaper in three entirely different currencies, and a great deal of professional confusion comes from not saying which. Before we begin, then, a rule: no claim of efficiency counts until it names the resource it saves.</p>
+<p>If you take one habit from this chapter, take this one. Fix the vocabulary before anything else. A training or serving system spends memory on three distinct things: the <strong>weights</strong> themselves; the <strong>gradients and optimizer state</strong> that accompany any trainable weight; and the <strong>activations</strong> held for the backward pass. Add per-token computation as a fourth resource, independent of all three. Each technique below improves exactly one of these four and leaves the rest untouched &mdash; and mistaking which is trap class T9, which is expensive in both senses of the word.</p>
 
-<h2>13.1 From comparisons to a reward</h2>
-<p>People are unreliable at scoring a response in isolation and reliable at comparing two. So the data are preference pairs: given a prompt, response \( y_w \) was preferred to \( y_l \). The standard model of such comparisons assumes an underlying scalar reward \( r \) and sets the probability of the observed preference to a logistic function of the reward difference:</p>
-\[ P(y_w \succ y_l) = \sigma\bigl(r(y_w) - r(y_l)\bigr). \]
-<p>Fitting \( r \) means minimizing \( -\log\sigma(r_w - r_l) \) over the dataset. One structural fact matters enormously and is easy to miss.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 13.1</span>
-<p class="title">Only differences are identified</p>
-<p>The loss depends on \( r_w \) and \( r_l \) only through their difference. Adding any constant \( \kappa \) to every reward leaves \( (r_w + \kappa) - (r_l + \kappa) = r_w - r_l \) unchanged, so the loss is identical. The reward function is therefore determined only up to an additive constant &mdash; there is no meaningful &ldquo;absolute&rdquo; reward scale, and any claim resting on one is unfounded.</p>
-<p><em>Check numerically.</em> With \( r_w = 1.2 \) and \( r_l = 0.7 \), the loss is \( -\ln\sigma(0.5) = -\ln 0.622 = \) <span class="keynum">0.474</span> nats. Shift both by \( +100 \): the difference is still \( 0.5 \) and the loss is still \( 0.474 \).</p>
-</div>
-
-<h2>13.2 Optimizing against a reward, on a leash</h2>
-<p>Given a reward, one could simply maximize it. One should not. A policy that maximizes a learned reward without constraint will find the regions where the reward model is wrong and exploit them &mdash; the engineering face of the reward-seizing argument from Chapter 9. The remedy is a leash: penalize divergence from the pretrained reference policy \( \pi_{\text{ref}} \). The objective becomes</p>
-\[ \max_{\pi}\ \mathbb{E}_{y\sim\pi}\bigl[r(x,y)\bigr] - \beta\,\mathrm{KL}\bigl(\pi \,\|\, \pi_{\text{ref}}\bigr), \]
-<p>with \( \beta \) setting how tight the leash is. This objective &mdash; reward minus a scaled divergence from the reference &mdash; is the target for the rest of the chapter. <em>Every method below optimizes this same objective; they differ only in how.</em></p>
-<p>The classical optimizer is a policy-gradient method with a clipped surrogate. Writing \( \rho = \pi(y)/\pi_{\text{old}}(y) \) for the probability ratio against the policy that generated the data and \( A \) for the advantage, the surrogate is</p>
-\[ \min\bigl(\rho A,\ \operatorname{clip}(\rho,\,1-\epsilon,\,1+\epsilon)\,A\bigr). \]
-<p>The \( \min \) makes the objective <em>pessimistic</em>: it always takes the less favorable of the clipped and unclipped values, in both directions.</p>
+<h2>13.1 Mixture-of-experts: decoupling size from compute</h2>
+<p>A dense layer spends every parameter on every token. A mixture-of-experts layer instead holds \( E \) parallel expert sub-networks and a small router that sends each token to the top \( k \) of them. Total parameters scale with \( E \); per-token computation scales with \( k \). The model's &ldquo;size&rdquo; splits into two numbers, and every claim about such a model must say which it means.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 13.1</span>
-<p class="title">Where the clip kills the gradient</p>
-<p>Take \( \epsilon = 0.2 \).</p>
-<p><strong>Case (i):</strong> \( \rho = 1.3 \), \( A = +2 \). Unclipped gives \( 2.6 \); clipped gives \( 1.2 \times 2 = 2.4 \). The minimum is \( 2.4 \), the clipped branch &mdash; which is constant in \( \rho \), so the <strong>gradient is zero</strong>. The policy has already moved far enough in the profitable direction; further movement earns nothing.</p>
-<p><strong>Case (ii):</strong> \( \rho = 0.7 \), \( A = -1 \). Unclipped gives \( -0.7 \); clipped gives \( 0.8 \times (-1) = -0.8 \). The minimum is \( -0.8 \), again the clipped branch, again zero gradient. Pessimism applies symmetrically.</p>
-<p>For \( \rho \) inside \( [0.8, 1.2] \), clipped and unclipped agree and the gradient flows normally. The clip is a trust region enforced by making excursions unprofitable rather than forbidden.</p>
+<p class="title">Total versus active</p>
+<p>Take 32 layers; in each, attention costs 50 M parameters, and there are 8 experts of 150 M each with top-2 routing.</p>
+<p>Total: \( 32\,(50 + 8\times150)\text{ M} = 32 \times 1250\text{ M} = \) <span class="keynum">40 B</span> parameters.<br>
+Active per token: \( 32\,(50 + 2\times150)\text{ M} = 32 \times 350\text{ M} = \) <span class="keynum">11.2 B</span> parameters.</p>
+<p>So training compute (\( 6 N_{\text{active}} D \), Chapter 7) and decode arithmetic behave like an 11-billion-parameter model, while memory &mdash; every expert must be resident &mdash; behaves like a 40-billion one. A mixture-of-experts buys capacity at small-model compute prices while paying large-model rent.</p>
+</div>
+
+<p>The router must spread tokens evenly, or a few experts receive everything while others starve and never train. Balance is encouraged by an auxiliary loss. Writing \( f_i \) for the fraction of tokens routed to expert \( i \) and \( P_i \) for the mean router probability assigned to it,</p>
+\[ \mathcal{L}_{\text{aux}} = E \sum_{i=1}^{E} f_i P_i, \]
+<p>which equals 1 under perfect balance and exceeds 1 otherwise. It is a pressure, not a guarantee. The hard backstop is <em>expert capacity</em>: each expert accepts at most \( \text{(capacity factor)} \times \text{tokens}/E \) tokens per batch, and tokens beyond that are dropped &mdash; a quality cliff that no loss curve displays directly.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 13.2</span>
+<p class="title">Imbalance, and what it costs</p>
+<p>Two experts receive fractions \( f = (0.7, 0.3) \) with mean router probabilities \( P = (0.6, 0.4) \). Then \( \mathcal{L}_{\text{aux}} = 2\,(0.7 \times 0.6 + 0.3 \times 0.4) = 2\,(0.42 + 0.12) = 1.08 \), above the balanced minimum of 1.</p>
+<p>Now capacity. With 1024 tokens, 8 experts, and a capacity factor of 1.25, each expert accepts \( 1.25 \times 1024/8 = 160 \) tokens. If 200 tokens are routed to expert 3, then <strong>40 are dropped</strong> &mdash; they pass through without that expert's contribution.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 13.1</span>
-<p>With \( \epsilon = 0.2 \), give the surrogate value and say whether the gradient is alive, for \( A = +1 \) at \( \rho = 0.7 \), and for \( A = -1 \) at \( \rho = 1.3 \).</p>
+<p>A model has 48 layers; each has 60 M shared parameters and 64 experts of 40 M, with top-2 routing. Give total and active parameter counts and their ratio.</p>
 <details><summary>Show answers</summary>
-<p>\( A=+1, \rho=0.7 \): unclipped \( 0.7 \), clipped \( 0.8 \); min is \( 0.7 \) &mdash; the <em>unclipped</em> branch, so gradient alive. \( A=-1, \rho=1.3 \): unclipped \( -1.3 \), clipped \( -1.2 \); min is \( -1.3 \) &mdash; unclipped, gradient alive. Only the two cases in Worked Example 13.1 are clipped.</p>
+<p>Total \( = 48(60 + 64\times40)\text{M} = 48 \times 2620\text{M} = 125.8 \) B. Active \( = 48(60 + 2\times40)\text{M} = 48 \times 140\text{M} = 6.7 \) B. Ratio \( \approx 18.7 \).</p>
 </details>
 </div>
 
-<h2>13.3 The collapse</h2>
-<p>Now the chapter's centerpiece. The KL-regularized objective of Section 13.2 has a closed-form optimum. Knowing it lets us eliminate the reward model entirely.</p>
-
-<p>Read the next derivation slowly; it is three short moves and the third one is the whole discovery. If you have seen this result stated before, you may remember it as &ldquo;the partition function is intractable, so we ignore it.&rdquo; That is not what happens, and the difference is the point. The term is never ignored and never approximated. It is carried through the algebra in full and then, at the last step, it eliminates itself &mdash; for a reason you can see coming if you watch what the preference model does with two responses to the <em>same</em> prompt.</p>
+<h2>13.2 Quantization: fewer bits per weight</h2>
+<p>Storing weights in \( b \) bits instead of 16 shrinks the weight budget proportionally &mdash; and, by Chapter 11's ceiling, <em>speeds up memory-bound decoding by the same factor</em>. That second consequence surprises people, so it is worth stating plainly: on a decode workload, quantization is a speedup, because the ceiling is bandwidth divided by bytes read.</p>
+<p>The cost is precision. A uniform quantizer covering \( [-R, R] \) with \( b \) bits has step size \( \Delta = 2R/2^{b} \), and the resulting error, modeled as uniform over one step, has variance</p>
+\[ \text{MSE} = \frac{\Delta^2}{12}. \]
 
 <div class="box deriv">
-<span class="label">Derivation 13.2 &middot; the crown jewel</span>
-<p class="title">From a reinforcement-learning objective to a supervised loss</p>
-<p><strong>Move 1 &mdash; the optimum.</strong> Maximizing \( \mathbb{E}_\pi[r] - \beta\,\mathrm{KL}(\pi\|\pi_{\text{ref}}) \) over distributions \( \pi \) is a standard variational problem whose solution is the reference tilted by the exponentiated reward:</p>
-\[ \pi^*(y\mid x) = \frac{1}{Z(x)}\,\pi_{\text{ref}}(y\mid x)\,e^{\,r(x,y)/\beta}, \]
-<p>where \( Z(x) = \sum_y \pi_{\text{ref}}(y\mid x)e^{r(x,y)/\beta} \) is a normalizing constant. \( Z \) is intractable &mdash; it sums over all possible responses &mdash; which is why this form alone does not give an algorithm.</p>
-<p><strong>Move 2 &mdash; invert.</strong> Solve the same equation for the reward:</p>
-\[ r(x,y) = \beta \log\frac{\pi^*(y\mid x)}{\pi_{\text{ref}}(y\mid x)} + \beta\log Z(x). \]
-<p>The reward is a log-ratio of the optimal policy to the reference, plus an intractable term that depends only on the prompt \( x \), not on the response \( y \).</p>
-<p><strong>Move 3 &mdash; substitute, and watch \( Z \) cancel.</strong> The preference model of Section 13.1 involves only the <em>difference</em> of two rewards for the same prompt. Substituting,</p>
-\[ r(x,y_w) - r(x,y_l) = \beta\log\frac{\pi^*(y_w)}{\pi_{\text{ref}}(y_w)} - \beta\log\frac{\pi^*(y_l)}{\pi_{\text{ref}}(y_l)} + \underbrace{\beta\log Z(x) - \beta\log Z(x)}_{=\ 0}. \]
-<p>The intractable term cancels exactly, because it is the same for both responses. Putting this difference into the Bradley&ndash;Terry loss gives a loss over the policy alone:</p>
-\[ \mathcal{L} = -\log\sigma\!\left(\beta\log\frac{\pi(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right). \]
-<p>No reward model. No sampling loop. No value network. A supervised loss on preference pairs that optimizes the same KL-regularized objective. The whole apparatus collapsed because an intractable constant was identical on both sides of a difference &mdash; the same cancellation-by-differencing that made Section 13.1's rewards identifiable only up to a constant.</p>
+<span class="label">Derivation 13.1</span>
+<p class="title">The quantization error, and two sensitivities</p>
+<p>A value uniformly distributed on \( [-\Delta/2, \Delta/2] \) has variance \( \frac{1}{\Delta}\int_{-\Delta/2}^{\Delta/2} x^2\,dx = \frac{\Delta^2}{12} \). Two consequences follow immediately from \( \Delta = 2R/2^b \):</p>
+<p><strong>Each extra bit quarters the error.</strong> Doubling \( b \) by one halves \( \Delta \), and the error goes as \( \Delta^2 \).</p>
+<p><strong>The error grows as the square of the range.</strong> If a few outlier weights force \( R \) from 1 to 4, the step quadruples and the MSE grows sixteenfold &mdash; at unchanged bit width. This is precisely why a handful of outlier channels wreck naive low-bit quantization, and why practical methods handle those channels separately.</p>
 </div>
 
-<p>The gradient has an instructive shape. Writing \( M \) for the margin inside the logistic, the loss is \( -\log\sigma(M) \) and its derivative carries a factor \( \sigma(-M) \). Pairs the model currently gets <em>wrong</em> &mdash; small or negative margin &mdash; receive weight near 1; pairs it already handles well receive vanishing weight. The method automatically concentrates on what it has not yet learned.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 13.2</span>
-<p class="title">One step, by hand</p>
-<p>Let \( \beta = 0.2 \), with log-ratios \( \log\frac{\pi(y_w)}{\pi_{\text{ref}}(y_w)} = 1.0 \) and \( \log\frac{\pi(y_l)}{\pi_{\text{ref}}(y_l)} = -0.5 \).</p>
-<p>Margin: \( M = 0.2\,(1.0 - (-0.5)) = 0.3 \). Loss: \( -\ln\sigma(0.3) = -\ln 0.574 = \) <span class="keynum">0.554</span> nats. Gradient weight: \( \sigma(-0.3) = 0.426 \).</p>
-<p>Train further until the margin reaches \( 1.0 \): the weight falls to \( \sigma(-1) = 0.269 \). The pair now matters less &mdash; exactly the desired behavior.</p>
-<p><em>A sanity check worth remembering.</em> At initialization the policy <em>is</em> the reference, so both log-ratios are zero, the margin is zero, and the loss is \( -\ln\sigma(0) = \ln 2 = \) <span class="keynum">0.693</span>. Any implementation whose loss does not begin at \( \ln 2 \) has a bug. This is the acceptance criterion for Lab 6.</p>
-</div>
-
-<div class="box trap">
-<span class="label">Trap &middot; T8 &middot; objective versus estimator</span>
-<p>This derivation changed the <em>estimator</em>, not the objective. Both the clipped policy-gradient method and the collapsed loss optimize the same KL-regularized target; one does it by sampling and one by a closed-form substitution. Statements like &ldquo;the direct method optimizes a different alignment goal&rdquo; are false as stated. A second, subtler error: dropping \( Z \) too early. It does not vanish because it is small or ignorable &mdash; it vanishes because it is <em>identical on both sides of a difference</em>. That cancellation is the entire discovery, and a derivation that discards \( Z \) before taking the difference has skipped the content.</p>
-</div>
+<p>Which weights deserve the bits is itself the question Chapter 10 answered in principle: precision costs, so spend it where it buys accuracy. Modern quantization methods are, in this light, allocation schemes over a bit budget &mdash; the Hinton&ndash;van Camp argument with an engineering budget attached.</p>
 
 <div class="drill">
 <span class="label">Drill 13.2</span>
-<p>With \( \beta = 0.1 \) and log-ratios \( 0.8 \) and \( 0.2 \), give the margin, the loss in nats, and the gradient weight.</p>
+<p>(a) How many bits keep the MSE at or below \( 10^{-4} \) over the range \( [-1,1] \)? (b) A 70B model at 16, 8, and 4 bits: give the weight memory and the batch-1 decode ceiling on the reference machine.</p>
 <details><summary>Show answers</summary>
-<p>Margin \( = 0.1(0.8-0.2) = 0.06 \). Loss \( = -\ln\sigma(0.06) = -\ln 0.515 = 0.664 \) nats. Weight \( = \sigma(-0.06) = 0.485 \).</p>
+<p>(a) \( \Delta \le \sqrt{12\times10^{-4}} = 0.0346 \); \( 2/2^b \le 0.0346 \Rightarrow 2^b \ge 57.7 \Rightarrow b = 6 \). (b) 140 / 70 / 35 GB; ceilings \( 2000/140 = 14.3 \), \( 28.6 \), \( 57 \) tokens/s.</p>
 </details>
 </div>
 
-<h2>13.4 Deleting the critic</h2>
-<p>Policy-gradient training needs a baseline to reduce variance, conventionally supplied by a learned value network of roughly the policy's size. Chapter 7's arithmetic makes the cost concrete: carrying policy and critic together roughly doubles the memory bill. An alternative computes the baseline from data instead of a network: sample a <em>group</em> of \( G \) responses to the same prompt, and standardize their rewards within the group,</p>
-\[ \hat A_i = \frac{r_i - \bar r}{s_r}, \]
-<p>where \( \bar r \) and \( s_r \) are the group's mean and standard deviation. The group supplies its own baseline; no critic is needed. This suits <em>verifiable</em> rewards especially well &mdash; mathematics and code, where a checker returns 1 or 0 &mdash; which is why it underpins modern reasoning training.</p>
+<h2>13.3 Low-rank adaptation: training a thin slice</h2>
+<p>The third technique changes what is <em>trainable</em>. Freeze a weight matrix \( W \in \mathbb{R}^{d\times d} \) and learn only a low-rank update \( \Delta W = BA \), with \( B \in \mathbb{R}^{d\times r} \) and \( A \in \mathbb{R}^{r\times d} \) for a small rank \( r \). The trainable parameter count falls from \( d^2 \) to \( 2rd \).</p>
 
 <div class="box worked">
 <span class="label">Worked Example 13.3</span>
-<p class="title">Group advantages, and a degenerate case</p>
-<p>A group of five responses earns rewards \( (1,1,1,0,0) \). Mean \( \bar r = 0.6 \); variance \( = \frac{3(0.4)^2 + 2(0.6)^2}{5} = \frac{0.48+0.72}{5} = 0.24 \), so \( s_r = 0.49 \). Advantages: correct responses get \( 0.4/0.49 = \) <span class="keynum">+0.82</span>, incorrect get \( -0.6/0.49 = \) <span class="keynum">&minus;1.22</span>.</p>
-<p>Now the case that must be known: a group where <em>all</em> responses are correct, or all incorrect. Then every \( r_i \) equals the mean, every numerator is zero, and <strong>every advantage is zero</strong> &mdash; the group contributes no learning signal at all. This is the arithmetic reason such training curates prompts near the edge of the model's ability: problems it always solves and problems it never solves are both worthless.</p>
+<p class="title">Which budget this actually attacks</p>
+<p>For \( d = 4096 \) and \( r = 16 \): trainable parameters \( 2 \times 16 \times 4096 = 131{,}072 \) against \( d^2 = 16.78 \) M &mdash; <span class="keynum">0.78%</span> of the matrix.</p>
+<p>Now the point. Optimizer state (roughly 16 bytes per parameter, Chapter 8) is paid only on <em>trainable</em> parameters. Fine-tuning a 7-billion-parameter model in full would demand about 112 GB of optimizer state; adapting roughly one percent of it demands about <span class="keynum">1.1 GB</span>. That is why such fine-tuning fits on a single accelerator &mdash; and it has essentially nothing to do with arithmetic, since the forward and backward passes still traverse the full frozen model.</p>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T9 &middot; name your budget</span>
+<p>Three near-universal misstatements. Quantization does not slow decoding down by adding work &mdash; it speeds it up, because decode is bandwidth-bound. Low-rank adaptation does not make training arithmetic cheaper &mdash; it makes optimizer memory cheaper, which then buys larger batches or smaller hardware. And a mixture-of-experts with the same <em>active</em> parameters as a dense model has the same compute but far greater memory. In each case the claim is only meaningful once you name the budget.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 13.3</span>
-<p>A group of eight responses earns \( (1,0,0,0,0,0,0,0) \). Give all eight advantages.</p>
+<p>At \( d = 8192 \), adapting all four attention projection matrices at rank \( r = 8 \): give the total trainable parameters and the percentage of the \( 4d^2 \) attention weights.</p>
 <details><summary>Show answer</summary>
-<p>Mean \( = 0.125 \); variance \( = \frac{(0.875)^2 + 7(0.125)^2}{8} = \frac{0.7656+0.1094}{8} = 0.1094 \), \( s_r = 0.331 \). Correct: \( 0.875/0.331 = +2.65 \). Each incorrect: \( -0.125/0.331 = -0.378 \).</p>
+<p>\( 4 \times 2 \times 8 \times 8192 = 524{,}288 \). Attention weights \( 4d^2 = 268.4 \) M. Fraction \( = 0.20\% \).</p>
 </details>
 </div>
 
-<h2>13.5 What the chapter bought</h2>
-<p>Preferences become a reward through a logistic model of comparisons, identified only up to an additive constant. Optimization against that reward must be leashed to a reference policy, or it degenerates into exploiting the reward model's errors. The leashed objective has a closed-form optimum, and inverting it and substituting into the preference model cancels the intractable normalizer &mdash; collapsing the whole pipeline into a supervised loss whose gradient automatically weights the pairs still being gotten wrong. And replacing a learned baseline with a group's own statistics deletes the critic, halving the memory and fitting verifiable-reward tasks exactly. Chapter 14 takes up what happens when the model is asked to spend more compute at answer time rather than training time.</p>
+<h2>13.4 What the chapter bought</h2>
+<p>Each technique here saves something real, and no two of them save the same thing. Mixture-of-experts decouples capacity from per-token compute, at the price of resident memory and a routing problem whose failure mode is silently dropped tokens. Quantization shrinks weights, and because decode is bandwidth-bound it buys speed directly &mdash; with an error that quarters per bit and grows as the square of the range. Low-rank adaptation shrinks optimizer state by two orders of magnitude, which is what made fine-tuning broadly accessible. Chapter 14 uses that accessibility: it is the chapter where a pretrained model is taught what kind of answer is wanted, and it contains the last of the book's three protocol derivations.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>Rewards \( r_w = 2.0 \), \( r_l = 1.1 \). Give the preference loss in nats. Then add 50 to both and give it again.</li>
-<li>With \( \epsilon = 0.15 \), state for which \( \rho \) the clip is active when \( A > 0 \).</li>
-<li>\( \beta = 0.5 \), log-ratios \( 0.4 \) and \( 0.1 \). Give margin, loss, and gradient weight.</li>
-<li>A group earns \( (1,1,0,0) \). Give the four advantages.</li>
+<li>A layer has 16 experts of 100 M each plus 40 M shared, top-2 routed, over 24 layers. Give total and active parameters.</li>
+<li>Router fractions \( f = (0.9, 0.1) \), mean probabilities \( P = (0.8, 0.2) \). Give the auxiliary loss.</li>
+<li>4096 tokens, 16 experts, capacity factor 1.0, and expert 7 receives 320 tokens. How many are dropped?</li>
+<li>At \( d = 2048 \), \( r = 32 \): give the trainable parameter count and its fraction of \( d^2 \).</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>The clip table.</strong> With \( \epsilon = 0.2 \), tabulate the surrogate value for \( A = +1 \) and \( A = -1 \) at \( \rho \in \{0.7, 1.0, 1.3\} \) &mdash; six cells &mdash; and mark which have zero gradient. State in one sentence what the pattern means for how far a single update may move the policy.</li>
-<li><strong>The collapse, reproduced.</strong> Starting from the KL-regularized objective, state the closed-form optimum, invert it for the reward, substitute into the Bradley&ndash;Terry preference probability, and show explicitly where and why the normalizer cancels. Write the resulting loss. Then explain, in one sentence, why the cancellation would fail if the two responses came from <em>different</em> prompts.</li>
-<li><strong>The cost of a critic.</strong> For a 7-billion-parameter policy trained in half precision, estimate total training memory with and without a critic of the same size, taking roughly 20 bytes per parameter for weights, gradients, and optimizer state combined. Give both figures and the ratio.</li>
-<li><strong>Degenerate groups.</strong> Show algebraically that a group whose rewards are all equal yields zero advantage for every member, regardless of the common value. Explain what this implies for curriculum design in verifiable-reward training.</li>
+<li><strong>Reading a sparse model honestly.</strong> A mixture-of-experts model is advertised at 140 B parameters; it has 64 experts with top-2 routing and 20% of its parameters in shared components. Estimate its active parameter count. Then state which of the following behave like the total and which like the active figure: training FLOPs, serving memory, decode arithmetic, KV cache size.</li>
+<li><strong>Outliers and bits.</strong> A weight matrix normally spans \( [-1,1] \) and is quantized to 8 bits. A handful of outliers extend the range to \( [-6,6] \). Give the MSE before and after, the factor of degradation, and the number of additional bits needed to restore the original error. Explain why handling outliers separately is cheaper than adding bits everywhere.</li>
+<li><strong>Budgets, side by side.</strong> For a 13-billion-parameter model, estimate (a) weight memory at half precision, (b) optimizer state under full fine-tuning at 16 bytes per parameter, and (c) optimizer state under rank-16 adaptation of matrices totalling 30% of the model. Present the three numbers and state which technique you would apply to fit training on a 80 GB accelerator.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Two cancellations, one technique.</strong> In Section 13.1 the reward's additive constant is unidentifiable because the loss sees only differences. In Section 13.3 the intractable normalizer cancels because it is the same for both responses to a prompt. Argue that these are the same mathematical phenomenon, state the general principle at work, and find one further place in this book where an inconvenient quantity is eliminated by the same manoeuvre. (Chapters 6 and 9 both contain candidates.)</li>
+<li><strong>The balance loss, minimized.</strong> Show for \( E = 2 \) that \( \mathcal{L}_{\text{aux}} = E\sum_i f_i P_i \) attains its minimum value of 1 when routing is uniform, by substituting \( f_1 = P_1 = x \), \( f_2 = P_2 = 1-x \) and minimizing over \( x \). Then explain in a paragraph why an auxiliary <em>pressure</em> plus a hard capacity limit is the standard design, rather than either mechanism alone &mdash; and what failure mode each one alone would permit.</li>
 </ol>
 </div>
 
 <div class="gate">
-<span class="label">Gate 13 &middot; Pass before Chapter 14 &mdash; three-days protocol</span>
-<p>Reproduce Derivation 13.2 &mdash; all three moves, with the cancellation shown explicitly &mdash; on blank paper, from nothing, on three separate days. Do not reread between attempts. Also reproduce the clip table (B-1) perfectly and the group-advantage computation including the degenerate case. This is the third and last protocol derivation, and it is the one most likely to be asked of you in a professional setting: the collapse is short, elegant, and widely misremembered.</p>
+<span class="label">Gate 13 &middot; Pass before Chapter 14</span>
+<p>Reproduce the active-versus-total accounting, Derivation 13.1 (the \( \Delta^2/12 \) error with both sensitivities), and the \( 2rd \) count with its budget argument, on blank paper. Attempt B-1 and B-3 closed book. You pass when, for any efficiency claim, you name its budget before evaluating it.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 13</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/2203.02155">Ouyang et al., <em>Training Language Models to Follow Instructions with Human Feedback</em> (2022)</a><span class="how">Section 3 and Figure 2 &mdash; the full pipeline in one picture, before the collapse simplified it.</span></li>
-<li><a href="https://arxiv.org/abs/2305.18290">Rafailov et al., <em>Direct Preference Optimization</em> (2023)</a><span class="how">Section 4 and Appendix A. Read it only <em>after</em> your first blank-paper attempt at Derivation 13.2, then compare.</span></li>
-<li><a href="https://arxiv.org/abs/1707.06347">Schulman et al., <em>Proximal Policy Optimization Algorithms</em> (2017)</a><span class="how">Section 3 for the clipped surrogate of Worked Example 13.1.</span></li>
-<li><a href="http://joschu.net/blog/kl-approx.html">Schulman, <em>Approximating KL Divergence</em></a><span class="how">Short and load-bearing: how the leash of Section 13.2 is actually estimated in practice.</span></li>
-<li><a href="https://arxiv.org/abs/2402.03300">Shao et al., <em>DeepSeekMath</em> (2024)</a><span class="how">The group-relative method of Section 13.4, in its original presentation.</span></li>
-<li><a href="https://arxiv.org/abs/2501.12948">DeepSeek-AI, <em>DeepSeek-R1</em> (2025)</a><span class="how">Read the training recipe and label every arrow with the chapter of this book that prices it.</span></li>
+<li><a href="https://arxiv.org/abs/2101.03961">Fedus, Zoph &amp; Shazeer, <em>Switch Transformers</em> (2021)</a><span class="how">Section 2 and the auxiliary-loss box; the capacity-factor discussion is Worked Example 13.2's source.</span></li>
+<li><a href="https://arxiv.org/abs/2401.04088">Jiang et al., <em>Mixtral of Experts</em> (2024)</a><span class="how">Read the parameter table against Worked Example 13.1 and check you can predict both numbers.</span></li>
+<li><a href="https://arxiv.org/abs/2208.07339">Dettmers et al., <em>LLM.int8()</em> (2022)</a><span class="how">The outlier story of Derivation 13.1's second sensitivity, discovered empirically.</span></li>
+<li><a href="https://arxiv.org/abs/2106.09685">Hu et al., <em>LoRA</em> (2021)</a> and <a href="https://arxiv.org/abs/2305.14314">Dettmers et al., <em>QLoRA</em> (2023)</a><span class="how">Section 4 of the first; the memory table of the second. Note which budget each paper's headline number refers to.</span></li>
+<li><a href="https://arxiv.org/abs/2210.17323">Frantar et al., <em>GPTQ</em> (2022)</a> and <a href="https://arxiv.org/abs/2306.00978">Lin et al., <em>AWQ</em> (2023)</a><span class="how">Abstracts suffice. Read both as bit-allocation schemes and map them onto Chapter 10's precision-costs-bits argument.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 13 &middot; Teaching Preferences</span>
-  <span><a href="chapter-14.html">Next: Thinking at Inference Time &rarr;</a></span>
+  <span>Chapter 13 &middot; Sparsity and Thrift</span>
+  <span><a href="chapter-14.html">Next: Teaching Preferences &rarr;</a></span>
 </footer>
 
 </div>

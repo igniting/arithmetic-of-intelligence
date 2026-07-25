@@ -60,7 +60,7 @@ bare count: "Six reflexes", "Three results", "Two rulers, two illusions", "One
 principle", "Three formulas". That is a tic. Vary the sentence.
 
 The closing must also hand off to the next chapter with a reason, not a
-label. Not "Chapter 7 covers parallelism" but "once a model is too large for one
+label. Not "Chapter 8 covers parallelism" but "once a model is too large for one
 accelerator, how is the work split, and what does that splitting cost?"
 
 ## Sentences
@@ -117,9 +117,9 @@ answer is an integer, and always with units named.
 Each entry is a link plus **one line saying how to read it**. Never a bare
 citation. Examples in use:
 
-> read the ablations as experiments about your Derivation 3.1
+> read the ablations as experiments about your Derivation 4.1
 > three pages, read fully
-> read it only *after* your first blank-paper attempt at Derivation 13.2
+> read it only *after* your first blank-paper attempt at Derivation 14.2
 > skim for what changed — work partitioning, not mathematics
 
 ## Checks before committing

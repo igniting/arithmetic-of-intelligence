@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 8 · Measurement — The Arithmetic of Intelligence</title>
+<title>Chapter 8 · The Machinery of Scale — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,117 +24,109 @@
 
 <header class="opener">
   <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 8</span>
-  <h1 class="ch">Measurement</h1>
-  <p class="ch-blurb">A capability that appears suddenly, a benchmark score that leaps &mdash; these are among the most misread phenomena in the field. Two small calculations show how much of the drama lives in the ruler rather than the model.</p>
+  <h1 class="ch">The Machinery of Scale</h1>
+  <p class="ch-blurb">A model too large for one accelerator must be split across many. The splitting is never free &mdash; and the cost, like everything else here, is a short calculation you can do from a timing diagram.</p>
 </header>
 
-<p class="lead">Here is a claim you will meet often: a model was scaled up, and at some size an ability it did not have simply appeared. It is a striking claim, and sometimes true. But before you believe it about any particular benchmark, there are two calculations to run &mdash; and they will frequently show that what changed was not the model but the ruler held against it.</p>
-<p>Two calculations do the work. The first shows how a smoothly improving model can produce a sharp jump on a benchmark that scores exact matches. The second shows how contamination &mdash; test items seen during training &mdash; inflates observed accuracy, and how to invert the inflation. Neither requires anything past Chapter 1.</p>
+<p class="lead">A model that will not fit on one accelerator must be cut into pieces and spread across many. Nothing about that is free. Cut it into sequential stages and the accelerators spend part of their time waiting on each other; spread its state across devices and you must first know how large that state actually is. Both costs are countable, and counting them is this chapter.</p>
+<p>Assign consecutive layers to consecutive devices &mdash; pipeline parallelism &mdash; and no device can begin until the one before it has finished, so the fleet idles through part of every step. Divide the optimizer state instead and the arithmetic is trivial division, but the figure you must compute first is the <em>undivided</em> total, because that is what tells you whether the run is possible at all. Both penalties shape real systems, and both are a few lines of counting.</p>
 
-<h2>8.1 Emergence as a property of the ruler</h2>
-<p>Suppose a model performs a task with \( k \) independent parts &mdash; adding two \( k \)-digit numbers, say &mdash; and gets each part right with probability \( p \). If the benchmark scores an <em>exact match</em>, awarding credit only when all \( k \) parts are correct, then the measured accuracy is \( p^k \). Now watch what a smooth improvement in \( p \) does to \( p^k \).</p>
-
-<p>Do this one on paper as you read. Pick a per-part accuracy of 0.9 and eight parts. Before computing, write down whether you expect the exact-match score to be closer to 0.9 or closer to 0.5. Nearly everyone writes something in the eighties or nineties, because 0.9 feels high and eight feels small. The answer is 0.43, and the size of that surprise is precisely the size of the illusion this section is about.</p>
+<h2>8.1 The pipeline bubble</h2>
+<p>Split a network into \( P \) sequential stages, one per accelerator. A batch flows through stage 1, then stage 2, and so on. If we fed one whole batch through, only one accelerator would be busy at a time &mdash; catastrophic waste. So we cut the batch into \( M \) micro-batches and stream them, so that while micro-batch 2 is in stage 1, micro-batch 1 is already in stage 2. But the pipeline still has to fill at the start and drain at the end, and during fill-and-drain some accelerators sit idle. That idle fraction is the <em>bubble</em>.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 8.1</span>
-<p class="title">A cliff manufactured from a slope</p>
-<p>Exact-match accuracy is \( p^k \). As a function of the underlying per-part skill \( p \), this is smooth &mdash; but for large \( k \) it is nearly flat at low \( p \) and rises steeply near \( p = 1 \), because raising a number just below one to a high power collapses it, while raising a number near one preserves it. The 50% point sits where \( p^k = \tfrac12 \), i.e. at \( p = 2^{-1/k} \), which increases toward 1 as \( k \) grows.</p>
-<p>Concretely, take \( k = 8 \). At \( p = 0.67 \), exact-match accuracy is \( 0.67^8 = e^{8\ln 0.67} = e^{-3.20} = 0.041 \) &mdash; about 4%. At \( p = 0.90 \), it is \( 0.90^8 = e^{-0.843} = 0.43 \) &mdash; about 43%. A modest, smooth improvement in per-digit skill, from \( 0.67 \) to \( 0.90 \), produces a tenfold leap on the benchmark. The model got steadily better; the benchmark reported a sudden emergence.</p>
+<p class="title">The bubble fraction from a timing diagram</p>
+<p>Let each micro-batch take one unit of time per stage. Draw the schedule: micro-batch \( m \) can enter stage \( s \) only after it has left stage \( s-1 \) and after micro-batch \( m-1 \) has left stage \( s \). Tracing the diagonal, the last micro-batch enters stage 1 at time \( M-1 \) and exits the final stage \( P \) at time \( M + P - 1 \). So the whole batch completes in \( M + P - 1 \) time units.</p>
+<p>The useful work is \( MP \) stage-units (each of \( M \) micro-batches through each of \( P \) stages). The total accelerator-time spent is \( P(M + P - 1) \) (all \( P \) accelerators, held for the whole duration). The idle &mdash; bubble &mdash; fraction is</p>
+\[ 1 - \frac{MP}{P(M+P-1)} = \frac{P-1}{M+P-1}. \]
+<p>Two boundary cases carry the meaning. With \( M = 1 \) &mdash; no micro-batching, naive model parallelism &mdash; the bubble is \( (P-1)/P \), which for \( P = 8 \) is \( 7/8 = 87.5\% \) idle. That catastrophe is the entire reason micro-batching exists. As \( M \) grows large, the bubble tends to zero: more micro-batches amortize the fill-and-drain.</p>
 </div>
 
 <div class="box worked">
 <span class="label">Worked Example 8.1</span>
-<p class="title">Where the cliff appears to fall</p>
-<p>Tabulate exact-match accuracy \( p^k \) at \( k = 8 \) as the per-part skill improves:</p>
-<p><span class="keynum">p = 0.50 &rarr; 0.004 &nbsp;&middot;&nbsp; 0.70 &rarr; 0.058 &nbsp;&middot;&nbsp; 0.80 &rarr; 0.168 &nbsp;&middot;&nbsp; 0.90 &rarr; 0.430 &nbsp;&middot;&nbsp; 0.95 &rarr; 0.663</span></p>
-<p>Between \( p = 0.5 \) and \( p = 0.7 \) the benchmark barely moves &mdash; from under half a percent to under six. Between \( 0.8 \) and \( 0.95 \) it moves from 17% to 66%. An observer watching only this metric would report a capability that lay dormant and then arrived; an observer watching \( p \) would report steady, unremarkable progress. The apparent onset sits near the 50% frontier \( 2^{-1/8} = 0.917 \), and for larger \( k \) it sits closer to 1 and looks sharper still.</p>
-</div>
-
-<div class="box trap">
-<span class="label">Trap &middot; T4 &middot; metric versus capability</span>
-<p>An abrupt jump in a thresholded score is <em>not</em> evidence of a discontinuous change in the underlying capability. The per-part skill \( p \) &mdash; visible in a smooth metric like per-token log-loss &mdash; may be improving perfectly steadily while the exact-match metric snaps upward. Before calling a capability &ldquo;emergent,&rdquo; ask whether the ruler is a threshold on many smoothly-improving parts. Much reported emergence survives this test poorly.</p>
+<p class="title">How many micro-batches to hide the bubble</p>
+<p>For an 8-stage pipeline, how many micro-batches keep the bubble at or below 5%? Require \( \frac{7}{M+7} \le 0.05 \), i.e. \( M + 7 \ge 140 \), so \( M \ge 133 \). You need well over a hundred micro-batches per optimizer step just to keep one-twentieth of your hardware from sitting idle &mdash; which is why pipeline parallelism is a tool of last resort, reached for only when a model will not fit any other way.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 8.1</span>
-<p>A model does \( k \)-digit exact-match addition with per-digit accuracy \( p = 0.98 \). What is the largest \( k \) for which exact-match accuracy stays at or above 50%?</p>
+<p>A 16-stage pipeline runs with \( M = 48 \) micro-batches. What fraction of accelerator-time is lost to the bubble?</p>
 <details><summary>Show answer</summary>
-<p>Need \( 0.98^k \ge 0.5 \), i.e. \( k \le \ln(0.5)/\ln(0.98) = (-0.693)/(-0.0202) = 34.3 \). Largest integer \( k = 34 \).</p>
+<p>\( (P-1)/(M+P-1) = 15/(48+15) = 15/63 = 0.238 \), about 24%.</p>
 </details>
 </div>
 
-<h2>8.2 Contamination: when the benchmark has been seen</h2>
-<p>A subtler distortion is contamination: some fraction of the test items appeared in the training data, so the model answers them from memory rather than skill. This inflates the observed score, and a two-line model lets us both quantify and invert the inflation.</p>
+<h2>8.2 Sharding and the memory wall</h2>
+<p>The second penalty is memory. Training a large model in mixed precision with a modern optimizer keeps, per parameter, not just the weight but also gradient and optimizer-state copies &mdash; on the order of 16 bytes per parameter once everything is counted. Multiply by the parameter count and the total is enormous; the remedy is to shard that state across many accelerators, each holding a slice. The arithmetic is mere division &mdash; but you should always compute the <em>unsharded</em> figure first, because that is the wall the sharding exists to climb.</p>
 
-<div class="box deriv">
-<span class="label">Derivation 8.2</span>
-<p class="title">Solving for the leak, then flipping it with Bayes</p>
-<p>Let a fraction \( c \) of test items be contaminated &mdash; answered correctly with probability 1 &mdash; while on the clean fraction \( 1-c \) the model's true accuracy is \( p \). The observed accuracy is the mixture</p>
-\[ \text{observed} = c\cdot 1 + (1-c)\,p = c + p(1-c). \]
-<p>Given an observed score and a known (or assumed) clean accuracy, solve for \( c \). Suppose observed \( = 0.70 \) and clean accuracy \( p = 0.60 \): then \( 0.70 = c + 0.60(1-c) = 0.60 + 0.40c \), so \( c = 0.25 \). A quarter of the benchmark leaked, and the observed score overstates true skill by ten points.</p>
-<p>Now the more revealing question: given that an item was answered correctly, what is the probability it was contaminated? By Bayes' rule, contaminated items contribute \( c \times 1 \) to the correct-answer mass, out of a total correct mass equal to the observed accuracy:</p>
-\[ P(\text{contaminated}\mid\text{correct}) = \frac{c}{\text{observed}} = \frac{0.25}{0.70} = 0.357. \]
-<p>Over a third of the model's apparent successes are memory, not skill. This is the calculation to run whenever a headline score seems too good &mdash; and it is nothing more than the Bayes flip of Chapter 1.</p>
+<div class="box worked">
+<span class="label">Worked Example 8.2</span>
+<p class="title">The wall, and the ladder over it</p>
+<p>A 50-billion-parameter model at 16 bytes of optimizer state per parameter needs \( 16 \times 5\times 10^{10} = 8\times 10^{11} \) bytes &mdash; 800 gigabytes &mdash; of state. No single accelerator holds that; it is the memory wall. Shard it with no redundancy across 64 accelerators and each holds \( 800/64 = 12.5 \) gigabytes, which fits comfortably. The sharding did nothing clever &mdash; it divided by 64 &mdash; but computing the unsharded 800 GB first is what shows you why the division was necessary.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 8.2</span>
-<p>A benchmark shows observed accuracy 0.85; the model's clean accuracy is believed to be 0.75. (a) What contamination fraction \( c \) explains the gap? (b) Given a correct answer, what is the probability it was contaminated?</p>
+<p>A 13-billion-parameter model at 16 bytes/parameter of state is sharded across 32 accelerators. Give the unsharded total and the per-accelerator share.</p>
 <details><summary>Show answers</summary>
-<p>(a) \( 0.85 = c + 0.75(1-c) = 0.75 + 0.25c \Rightarrow c = 0.40 \). (b) \( P = c/\text{observed} = 0.40/0.85 = 0.47 \).</p>
+<p>Unsharded: \( 16 \times 1.3\times 10^{10} = 2.08\times 10^{11} \) bytes \( = 208 \) GB. Per accelerator: \( 208/32 = 6.5 \) GB.</p>
 </details>
 </div>
 
-<h2>8.3 Voting, briefly</h2>
-<p>One more measurement idea belongs here, though Chapter 14 develops it fully: taking the majority vote of several independent attempts. We met the calculation in Chapter 1 &mdash; five chains at \( p = 0.6 \) vote correctly with probability \( 0.68 \). The one fact to carry forward is that voting helps only when the single-attempt probability already exceeds one half; below that threshold, the majority amplifies the error instead of correcting it. Voting sharpens a capability that is already there; it does not manufacture one. That distinction &mdash; sharpening versus creating &mdash; is exactly the metric-versus-capability theme of this chapter in another guise.</p>
+<div class="box trap">
+<span class="label">Trap &middot; T7 &middot; rate versus stock</span>
+<p>The bubble is a <em>fraction of accelerator-time</em>, not an amount of time, and the two get confused constantly. A 17.9% bubble on an eight-stage pipeline does not mean seventeen-point-nine of anything &mdash; it means that across the whole fleet, for the whole step, that proportion of available accelerator-seconds produced nothing. Doubling the micro-batch count halves the fraction while <em>lengthening</em> the wall-clock step, because more micro-batches means more work per step. Efficiency and latency move in opposite directions here, and a claim about one says nothing about the other.</p>
+<p>The same caution applies to sharding. &ldquo;12.5 GB per accelerator&rdquo; is a stock; &ldquo;800 GB of state&rdquo; is the stock that matters for feasibility. Quoting only the first hides whether the run is possible at all.</p>
+</div>
 
-<h2>8.4 What the chapter bought</h2>
-<p>A benchmark can mislead in two quite different ways, and this chapter priced both. Exact-match scoring turns a smooth improvement in per-part skill into an apparent cliff, and the 50% frontier \( p = 2^{-1/k} \) tells you where the cliff will seem to fall. Contamination inflates a score by \( c + p(1-c) \), and Bayes' rule reveals how much of the model's success is memory. Both are warnings to measure the ruler before trusting the miracle &mdash; a habit that separates careful readers of the field from credulous ones. Chapter 9 closes Part II by descending to the idea beneath all of this: that learning is compression, that simplicity is a probability, and that a single length prior turns Occam's razor from a preference into a theorem.</p>
+<h2>8.3 What the chapter bought</h2>
+<p>Neither penalty of scale is mysterious; both submit to counting. The pipeline bubble, \( (P-1)/(M+P-1) \), comes straight from a timing diagram and explains why micro-batching is mandatory and why pipelines are a last resort. Memory sharding is division, but the unsharded figure is the wall that motivates it. These are the two arithmetic facts that shape how the largest training runs are laid out across hardware &mdash; and they return, transformed, in Chapter 11, where the same roofline thinking governs not training but the economics of serving a trained model one token at a time. Before that, Chapter 9 confronts a subtler problem: once models are this large and this capable, how do we know what they can actually do &mdash; and when a benchmark is lying to us?</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A task has \( k = 5 \) independent parts, each correct with \( p = 0.9 \). Give the exact-match accuracy.</li>
-<li>At what per-part accuracy \( p \) does a \( k = 10 \) exact-match task reach 50%?</li>
-<li>Observed accuracy 0.72, clean accuracy 0.60. Find the contamination fraction.</li>
-<li>With that contamination, what fraction of correct answers are contaminated?</li>
+<li>A 4-stage pipeline runs with 12 micro-batches. Give the bubble fraction.</li>
+<li>What is the bubble fraction of a 10-stage pipeline with no micro-batching (\( M = 1 \))?</li>
+<li>A 30-billion-parameter model at 16 bytes/parameter: give the unsharded state in GB.</li>
+<li>The same model sharded over 40 accelerators: give the per-accelerator state.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>The shape of emergence.</strong> For an exact-match task with \( k = 8 \), tabulate accuracy at \( p = 0.5, 0.7, 0.8, 0.9, 0.95 \). Identify where the steepest rise occurs and relate it to the 50% frontier \( p = 2^{-1/k} \). Explain in two sentences why a per-token log-loss curve would show no such cliff.</li>
-<li><strong>Inverting a leak.</strong> A model reports 0.90 on a benchmark. Independent evidence suggests its true clean accuracy is 0.65. Find the implied contamination fraction, and the probability that a given correct answer came from contamination. Comment on what these numbers imply for trusting the headline score.</li>
-<li><strong>Voting's threshold.</strong> Show, for majority voting over three independent attempts, that the majority is more accurate than a single attempt if and only if the single-attempt accuracy exceeds \( \tfrac12 \). (Compute the majority accuracy \( 3p^2(1-p) + p^3 \) and compare to \( p \).)</li>
+<li><strong>Deriving the bubble.</strong> From the scheduling rules &mdash; micro-batch \( m \) enters stage \( s \) only after leaving \( s-1 \) and after \( m-1 \) leaves \( s \) &mdash; derive the completion time \( M+P-1 \) and the bubble fraction \( (P-1)/(M+P-1) \). Evaluate at \( (P,M) = (8,1) \) and \( (8,32) \), and say what the two numbers mean operationally.</li>
+<li><strong>Sizing micro-batches.</strong> For a 12-stage pipeline, find the minimum number of micro-batches that keeps the bubble at or below 8%.</li>
+<li><strong>The wall.</strong> A 175-billion-parameter model is trained at 16 bytes/parameter of state. Give the unsharded total, and the number of 80 GB accelerators required to hold the state alone (ignoring activations). Comment on why the unsharded figure is the right thing to compute first.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Two illusions, one theme.</strong> Emergence (Section 8.1), contamination (Section 8.2), and voting (Section 8.3) are all instances of a single caution: the number you observe is a function of both the model and the measurement, and confusing the two misleads. For each of the three, identify precisely what belongs to the model, what belongs to the ruler, and what error you make if you attribute the ruler's contribution to the model. (This is trap class T4 stated in full generality.)</li>
+<li><strong>Two penalties at once.</strong> Suppose adding pipeline stages \( P \) lets you fit a larger model (relieving the memory wall) but raises the bubble (wasting time). Sketch qualitatively how the bubble fraction and the per-accelerator memory each move as \( P \) increases at fixed \( M \), and argue why real systems combine pipeline parallelism with other forms of sharding rather than relying on pipelining alone. (This is the conceptual seed of modern multi-axis parallelism.)</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 8 &middot; Pass before Chapter 9</span>
-<p>Reproduce Derivations 8.1 (the \( p^k \) cliff and its 50% frontier) and 8.2 (the contamination mixture and its Bayes flip) on blank paper. Attempt B-1 and B-2 closed book. You pass when you can produce the \( 0.67 \to 0.90 \) becomes \( 4\% \to 43\% \) figures and the \( c/\text{observed} \) Bayes ratio without notes.</p>
+<p>Reproduce Derivation 8.1 from a hand-drawn timing diagram &mdash; the completion time and the bubble fraction &mdash; on blank paper, and evaluate both boundary cases. Attempt B-1 and B-2 closed book. You pass when you can draw the staircase, read \( M+P-1 \) off it, and produce the \( 87.5\% \) idle figure for a naive 8-stage pipeline without hesitation.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 8</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/2206.07682">Wei et al., <em>Emergent Abilities of Large Language Models</em> (2022)</a><span class="how">The case for emergence; read it as the claim Derivation 8.1 puts to the test.</span></li>
-<li><a href="https://arxiv.org/abs/2304.15004">Schaeffer, Miranda &amp; Koyejo, <em>Are Emergent Abilities of Large Language Models a Mirage?</em> (2023)</a><span class="how">The rebuttal, built on exactly the metric argument of this chapter. Read the two papers as a debate you can now adjudicate.</span></li>
-<li><a href="https://arxiv.org/abs/2104.08758">Dodge et al., <em>Documenting the English Colossal Clean Crawled Corpus</em> (2021)</a><span class="how">On what actually ends up in training data &mdash; the empirical face of the contamination model.</span></li>
-<li><a href="https://arxiv.org/abs/1611.03530">Zhang et al., <em>Understanding Deep Learning Requires Rethinking Generalization</em> (2016)</a><span class="how">Networks can memorize random labels; the backdrop against which contamination becomes a serious worry, and a bridge to Chapter 9.</span></li>
+<li><a href="https://arxiv.org/abs/1811.06965">Huang et al., <em>GPipe</em> (2018)</a><span class="how">The micro-batching pipeline of Derivation 8.1; read their bubble analysis and match it to yours.</span></li>
+<li><a href="https://arxiv.org/abs/1909.08053">Shoeybi et al., <em>Megatron-LM</em> (2019)</a><span class="how">Tensor parallelism &mdash; a different axis of splitting; read for which resource it attacks versus pipelining.</span></li>
+<li><a href="https://arxiv.org/abs/1910.02054">Rajbhandari et al., <em>ZeRO</em> (2019)</a><span class="how">The state-sharding of Section 8.2, systematized; the three stages of ZeRO are three levels of the division you just did.</span></li>
+<li><a href="https://jax-ml.github.io/scaling-book/">Austin et al., <em>How to Scale Your Model</em></a><span class="how">The best free systems text on this material; work its parallelism chapter now, and note that its roofline chapter previews Chapter 11.</span></li>
+<li><a href="https://huggingface.co/spaces/nanotron/ultrascale-playbook">Hugging Face, <em>The Ultra-Scale Playbook</em></a><span class="how">Parallelism strategies illustrated end to end; useful for the C-challenge's multi-axis picture.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 8 &middot; Measurement</span>
-  <span><a href="chapter-09.html">Next: Compression and Occam &rarr;</a></span>
+  <span>Chapter 8 &middot; The Machinery of Scale</span>
+  <span><a href="chapter-09.html">Next: Measurement &rarr;</a></span>
 </footer>
 
 </div>
