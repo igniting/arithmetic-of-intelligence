@@ -323,6 +323,131 @@ catch an arithmetic inconsistency").
 
 ---
 
+# Part II — Technical content
+
+A second pass, over the technical substance rather than the syllabus: what the
+book defines, what it assumes, what its notation does, and how precisely it
+points at its sources. The findings here are the reason for
+`docs/SECOND-EDITION-PLAN.md`.
+
+## 11. The book manipulates objects it never states
+
+This is the largest single finding in either pass. The book derives results
+*about* things it never writes down. Every item below was confirmed by grep over
+all of `src/`, not by impression.
+
+| object | never stated | but required by |
+|---|---|---|
+| **softmax** | no formula anywhere in the book | Derivations 5.1, 5.2, 11.1; §5.3 temperature; Lab 2 |
+| **attention** | `softmax(QK^T/√d)V` never written; Q, K, V never defined as learned projections | all of Chapter 5, Chapter 10's cache, Chapter 11's kernel |
+| **multi-head attention** | absent from Chapter 5 entirely | \(H_{kv}\), \(d_{\text{head}}\) appear cold in Derivation 10.1; grouped-query attention is priced on them |
+| **the momentum update** | \(v \leftarrow \beta v + g,\ x \leftarrow x - \eta v\) never written | Chapter 2's √κ result — a *protocol* derivation — and the cover figure |
+| **the gated recurrence** | \(c_t = f_t\odot c_{t-1} + i_t\odot g_t\) never written | Derivation 4.1's per-step factor *is* \(f\); the identification is the chapter's crux and is left implicit |
+| **KL divergence** | only the Gaussian closed form (§9.3); no general definition | Chapter 13's leash, Derivation 13.2's Move 1, Schulman reading |
+| **advantage \(A\)** | "\(A\) for the advantage" — never defined | Worked Example 13.1, Drill 13.1, §13.4, four exercises |
+| **policy, critic, baseline, on-policy ratio** | RL vocabulary used throughout Chapter 13 | a protocol chapter the reader cannot parse without it |
+| **token, vocabulary** | never defined | used from Chapter 1 (perplexity per token) onward; \(D\) is measured in them |
+| **logit** | first used in §5.3, undefined | temperature, softmax saturation, Worked Example 5.1 |
+| **normalization layer** | what it computes is never stated | Chapter 3's third theorem is about *where to put it* |
+| **Jacobian** | never defined | Derivation 3.1 is a product of them |
+| **\(\Phi\), the normal CDF** | named in §1.3; never defined, and **no table of values anywhere** | Derivation 3.2 needs \(\Phi(2.04)=0.9793\); Appendix D needs \(\Phi(2.1)=0.9821\); **Gate 3 demands both on blank paper** |
+| **the reverse diffusion step** | §15.2 contains no equation at all | the chapter's own sampling story |
+| **mixed precision; what optimizer state contains; tensor parallelism** | asserted or named only | Chapter 7 §7.2, its C-challenge, and Appendix D's answer to it |
+
+Two of these are acute rather than merely untidy. The **Φ table** makes two
+closed-book gates literally impossible as written — a reader cannot produce
+0.9793 from nothing. And the **RL vocabulary** gap means Chapter 13, one of the
+three protocol chapters, is the one chapter a reader who has followed the book
+faithfully cannot begin.
+
+## 12. Notation collides, and there is no apparatus to resolve it
+
+`docs/STYLE.md` requires defining every symbol at first use in a chapter, which
+the chapters mostly honour locally. Nothing manages symbols *globally*, and the
+book reuses them heavily:
+
+| symbol | meanings in use |
+|---|---|
+| **β** | power-law exponent (§1.1, §4.5) · momentum coefficient (cover figure, README) · bytes per value (Der. 10.1) · KL strength (Ch 13) · noise schedule (Ch 15) |
+| **k** | kernel side (Ch 3) · compute constant \(C=kND\) (Ch 6) · number of parts (Ch 8) · draft length (Ch 11) · top-\(k\) routing (Ch 12) · sample count (Ch 14) |
+| **A, B** | loss coefficients (Ch 6) · LoRA factors (Ch 12) · advantage / batch (Ch 13, Ch 10) · option labels (Ch 9, Ch 16) |
+| **b** | data exponent (Ch 6) · gate bias (Der. 4.2) · bits per weight (Ch 12) |
+| **σ** | weight standard deviation (Ch 1–2) · the logistic function (Ch 4, 13) · \(\sigma_p,\sigma_q\) coding widths and noise sd (Ch 9) |
+| **p** | probability (Ch 8, 14) · parameter count in the OLS risk (§9.6) · target distribution (Der. 11.2) |
+| **L** | the loss (Ch 2, 6) · number of layers (Ch 3, 10) |
+| **E** | irreducible loss (Ch 6) · expert count (Ch 12) · expectation |
+| **α, κ, d, v, V, C, T, s** | two or three meanings each |
+
+β and k are the dangerous ones: β carries five meanings, two of which
+(KL strength, noise schedule) sit in adjacent chapters, and one of which
+(momentum) belongs to the result the cover figure plots.
+
+There is also **no notation table, no glossary, and no index** — `docs/HISTORY.md`
+§8 already lists the index as open. For a book whose stated use is "when a new
+paper resists you, scan this list and ask which entry prices it", the absence of
+a lookup path is a functional gap, not a cosmetic one.
+
+## 13. The stated prerequisite does not match the actual demand
+
+The preface promises "school-level mathematics — logarithms, elementary
+calculus, basic probability" and says Chapter 1 "sharpens exactly six
+mathematical reflexes and nothing else". What the chapters actually require:
+
+- the spectral theorem, implicitly — Chapter 2 aligns coordinates with the
+  eigenbasis of the curvature in its first paragraph;
+- matrix calculus — Derivation 3.1 expands \(\prod(I+J_\ell)\);
+- the matrix-multiply cost, and Bayes' rule — both attributed to Chapter 1,
+  both absent from it (Part I §1 of this review);
+- KL divergence and constrained optimisation *over distributions* — Chapter 13
+  Move 1;
+- rejection sampling — Derivation 11.2;
+- everything about neural networks, which is outsourced to a reading annotation
+  ("Watch before Chapter 2 if you have never seen a neural network") rather than
+  stated as a prerequisite.
+
+The honest position is that this book has two prerequisites — school mathematics
+*and* prior acquaintance with neural networks — and currently declares one.
+
+## 14. Readings: 31 of 76 point at a whole work
+
+Measured over every `<span class="how">` annotation in `src/chapter-*.html`,
+counting an entry as *pointed* if it names a section, figure, table, chapter,
+page count, abstract, or a specific named element:
+
+```
+ch01 4/4   ch02 3/4   ch03 1/5   ch04 2/5   ch05 2/5   ch06 4/5   ch07 2/5   ch08 1/4
+ch09 4/6   ch10 1/4   ch11 3/5   ch12 4/5   ch13 6/6   ch14 1/4   ch15 4/5   ch16 3/4
+                                                       total 45/76 = 59% pointed
+```
+
+`docs/STYLE.md` says every entry is "a link plus one line saying *how* to read
+it. Never a bare citation." The annotations are never bare — the *how* is always
+there — but 31 of them apply that instruction to an entire paper, blog series or
+book. Chapters 3, 8, 10 and 14 are the weakest (1 pointed entry each).
+
+Three specific problems beyond the count:
+
+1. **One entry has no author and no title.** `chapter-06.html:136` reads
+   "Background on scaling behavior", linking to a post on `jasonwei.net`. It is
+   the only unattributed reading in the book.
+2. **Four entries bundle two works under one annotation** — Nakkiran + Belkin
+   (ch 9), Ainslie + Shazeer (ch 10), Hu + Dettmers and Frantar + Lin (ch 12) —
+   so 80 works are covered by 76 annotations, and the paired ones necessarily
+   get a vaguer instruction than a single work would.
+3. **Several point at book-length works with no locator**: the Ultra-Scale
+   Playbook, *How to Scale Your Model*, *Dive into Deep Learning*, Branwen's
+   Scaling Hypothesis, Kipply's inference-arithmetic post, two of Weng's
+   surveys, the Annotated Transformer. "Recompute every number in it yourself"
+   is a good instruction attached to an unbounded target.
+
+The best entries in the book show exactly what the standard should be — Dao,
+FlashAttention: "Sections 1–3 and Figure 1. The IO analysis is Worked Example
+11.1 made rigorous"; Fedus, Switch Transformers: "Section 2 and the
+auxiliary-loss box". Both name *where*, *what*, and *against which derivation*.
+45 entries meet that standard and 31 do not.
+
+---
+
 ## If only five things are changed
 
 1. Add Bayes and the matmul cost to Chapter 1 (§1). Cheapest fix, largest
