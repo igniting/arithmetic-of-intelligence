@@ -26,7 +26,7 @@
 
 <div class="chrome"><div class="chrome-in">
   <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
-  <div class="nav"><a href="chapter-16.html">&larr; Chapter 16</a><a href="appendix-b.html">Appendix B &rarr;</a></div>
+  <div class="nav"><a href="chapter-17.html">&larr; Chapter 17</a><a href="appendix-b.html">Appendix B &rarr;</a></div>
 </div></div>
 
 <div class="page">
@@ -34,56 +34,72 @@
 <header class="opener">
   <span class="eyebrow">Appendix A</span>
   <h1 class="ch">The Derivation Bank</h1>
-  <p class="ch-blurb">The syllabus of this book, in thirty-eight items. You are ready when each comes off a blank page, unprompted, with given constants slotted in.</p>
+  <p class="ch-blurb">The syllabus of this book, in 50 items. You are ready when each comes off a blank page, unprompted, with given constants slotted in.</p>
 </header>
 
 <p class="lead">This is not a summary to read. It is a checklist to be tested against &mdash; the statement of each result, without its derivation, so that you must supply the derivation yourself.</p>
 <p>Use it three ways. As a <strong>gate</strong>: at the end of each chapter, cover the book and reproduce that chapter's entries. As a <strong>sweep</strong>: at the end of each Part, reproduce every entry so far in a few sittings. As a <strong>diagnostic</strong>: when a new paper resists you, scan this list and ask which entry prices it. Three items &mdash; marked <span class="protocol">protocol</span> &mdash; are to be reproduced from nothing on three separate days, without rereading between attempts.</p>
 
+<h2>Part I &middot; Foundations</h2>
+<ol class="bank">
+<li><span class="bnum">1</span><span class="bbody">Training and serving cost: 2 FLOPs per multiply&ndash;accumulate, one forward pass and two backward, giving \( 6ND \) to train and \( 2N \) per generated token to serve.<span class="bch"> Ch. 2</span></span></li>
+</ol>
+
 <h2>Part II &middot; The Classical Era</h2>
 <ol class="bank">
-<li><span class="bnum">1</span><span class="bbody">The stable step-size window \( 0 < \eta < 2/\lambda_{\max} \), derived from \( |1-\eta\lambda| < 1 \), and why the steepest curvature binds.<span class="bch"> Ch. 2</span></span></li>
-<li><span class="bnum">2</span><span class="bbody">Steps to converge, \( t = \ln F/\ln(1/\rho) \), with the given rates \( \rho_{\mathrm{GD}} = \frac{\kappa-1}{\kappa+1} \) and \( \rho_{\text{mom}} = \frac{\sqrt\kappa-1}{\sqrt\kappa+1} \); the speedup ratio tends to \( \sqrt\kappa \). <span class="protocol">protocol</span><span class="bch"> Ch. 2</span></span></li>
-<li><span class="bnum">3</span><span class="bbody">Fan-in variance \( m\sigma^2 \) and the choice \( \sigma^2 = 1/m \); the symmetry-breaking argument for random initialization.<span class="bch"> Ch. 2</span></span></li>
-<li><span class="bnum">4</span><span class="bbody">Convolution arithmetic &mdash; output size with the floor, parameters with the bias, multiply&ndash;accumulates &mdash; chained through a network.<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">5</span><span class="bbody">Expansion of \( \prod_\ell (I + J_\ell) \): \( \binom{L}{k} \) terms with \( k \) Jacobians, and the indestructible \( k=0 \) identity.<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">6</span><span class="bbody">Residual path lengths as \( \mathrm{Binomial}(L,\tfrac12) \), with the normal approximation and continuity correction.<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">7</span><span class="bbody">The \( \sqrt{L} \) activation drift from independent per-block perturbations, and where normalization must sit.<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">8</span><span class="bbody">Bottleneck-versus-plain multiply&ndash;accumulate ratio at general channel compression \( c \).<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">9</span><span class="bbody">Dilated receptive field: a dilation-\( r \) layer adds \( 2r \), so the schedule \( 1,2,\dots,2^{n-1} \) reaches \( 2^{n+1}-1 \) against \( 2n+1 \) undilated; and the parameter-ratio payoff.<span class="bch"> Ch. 3</span></span></li>
-<li><span class="bnum">10</span><span class="bbody">Gradient horizon \( t > \ln\epsilon/\ln f \); the gate bias \( b = \ln\frac{f}{1-f} \); dropout compounding per time step versus per layer.<span class="bch"> Ch. 4</span></span></li>
-<li><span class="bnum">11</span><span class="bbody">Recurrent layer parameter count \( 4d_h(d_{\text{in}} + d_h + 1) \), assembled into a full model, and the embedding-plus-readout fraction.<span class="bch"> Ch. 4</span></span></li>
-<li><span class="bnum">12</span><span class="bbody">Power-law slope extraction from a &ldquo;per tenfold&rdquo; statement, and extrapolation to a target improvement.<span class="bch"> Ch. 4</span></span></li>
-<li><span class="bnum">13</span><span class="bbody">Score variance \( \operatorname{Var}(q\cdot k) = d \) forcing the \( 1/\sqrt{d} \) scale; attention \( 2n^2d \) and feed-forward \( 8nd^2 \) costs and their crossover at \( n = 4d \); temperature as monotone logit scaling.<span class="bch"> Ch. 5</span></span></li>
-<li><span class="bnum">14</span><span class="bbody">Reversal-trick lags: unreversed lag \( n \) everywhere, reversed lag \( 2j-1 \), mean exactly \( n \), maximum worse.<span class="bch"> Ch. 5</span></span></li>
-<li><span class="bnum">15</span><span class="bbody">The compute-optimal allocation: substitute, differentiate, obtain \( aAN^{-a} = bBD^{-b} \), and read off \( N \propto C^{b/(a+b)} \), \( D \propto C^{a/(a+b)} \). <span class="protocol">protocol</span><span class="bch"> Ch. 6</span></span></li>
-<li><span class="bnum">16</span><span class="bbody">The halving cost \( 2^{1/\alpha} \) for a loss term \( \propto N^{-\alpha} \), and re-budgeting a model at a target token ratio under fixed compute.<span class="bch"> Ch. 6</span></span></li>
-<li><span class="bnum">17</span><span class="bbody">Pipeline completion time \( M + P - 1 \) from a timing diagram, and the bubble fraction \( \frac{P-1}{M+P-1} \) with both boundary cases.<span class="bch"> Ch. 7</span></span></li>
-<li><span class="bnum">18</span><span class="bbody">Optimizer-state sharding arithmetic, always with the unsharded total computed first.<span class="bch"> Ch. 7</span></span></li>
-<li><span class="bnum">19</span><span class="bbody">Exact-match accuracy \( p^k \), its 50% frontier at \( p = 2^{-1/k} \), and the manufactured-cliff argument.<span class="bch"> Ch. 8</span></span></li>
-<li><span class="bnum">20</span><span class="bbody">Contamination: observed \( = c + p(1-c) \), inverted for \( c \), and the Bayes flip \( P(\text{contaminated}\mid\text{correct}) = c/\text{observed} \).<span class="bch"> Ch. 8</span></span></li>
-<li><span class="bnum">21</span><span class="bbody">Two-part codes: model bits plus residual bits, model selection by the minimum, and hypothesis odds \( 2^{\Delta} \).<span class="bch"> Ch. 9</span></span></li>
-<li><span class="bnum">22</span><span class="bbody">Cross-entropy as a literal file size; tokens times bits per token divided by eight.<span class="bch"> Ch. 9</span></span></li>
-<li><span class="bnum">23</span><span class="bbody">The Gaussian coding cost of a weight, its zero case, its divergence as precision rises, and the noisy-weights-are-cheap reading.<span class="bch"> Ch. 9</span></span></li>
-<li><span class="bnum">24</span><span class="bbody">The length prior \( 2^{-\ell} \): Kraft, posterior mixtures over consistent programs, and the theorem that each extra bit halves the vote.<span class="bch"> Ch. 9</span></span></li>
-<li><span class="bnum">25</span><span class="bbody">Typicality versus membership, via randomness deficiency \( \log_2|M| - K(x) \); the OLS excess risk \( \sigma^2 p/(n-p-1) \) and its divergence at the interpolation threshold; grokking as a code-length transition.<span class="bch"> Ch. 9</span></span></li>
-<li><span class="bnum">26</span><span class="bbody">The universal intelligence measure \( \Upsilon = \sum_i 2^{-K_i}V_i \) with its three properties, and the reward-seizing threshold \( r > (1-\gamma)/\gamma \).<span class="bch"> Ch. 9</span></span></li>
+<li><span class="bnum">2</span><span class="bbody">The stable step-size window \( 0 < \eta < 2/\lambda_{\max} \), derived from \( |1-\eta\lambda| < 1 \), and why the steepest curvature binds.<span class="bch"> Ch. 3</span></span></li>
+<li><span class="bnum">3</span><span class="bbody">Steps to converge, \( t = \ln F/\ln(1/\rho) \), with the given rates \( \rho_{\mathrm{GD}} = \frac{\kappa-1}{\kappa+1} \) and \( \rho_{\text{mom}} = \frac{\sqrt\kappa-1}{\sqrt\kappa+1} \); the speedup ratio tends to \( \sqrt\kappa \). <span class="protocol">protocol</span><span class="bch"> Ch. 3</span></span></li>
+<li><span class="bnum">4</span><span class="bbody">Fan-in variance \( m\sigma^2 \) and the choice \( \sigma^2 = 1/m \); the symmetry-breaking argument for random initialization.<span class="bch"> Ch. 3</span></span></li>
+<li><span class="bnum">5</span><span class="bbody">Convolution arithmetic &mdash; output size with the floor, parameters with the bias, multiply&ndash;accumulates &mdash; chained through a network.<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">6</span><span class="bbody">Expansion of \( \prod_\ell (I + J_\ell) \): \( \binom{L}{k} \) terms with \( k \) Jacobians, and the indestructible \( k=0 \) identity.<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">7</span><span class="bbody">Residual path lengths as \( \mathrm{Binomial}(L,\tfrac12) \), with the normal approximation and continuity correction.<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">8</span><span class="bbody">The \( \sqrt{L} \) activation drift from independent per-block perturbations, and where normalization must sit.<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">9</span><span class="bbody">Bottleneck-versus-plain multiply&ndash;accumulate ratio at general channel compression \( c \).<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">10</span><span class="bbody">Dilated receptive field: a dilation-\( r \) layer adds \( 2r \), so the schedule \( 1,2,\dots,2^{n-1} \) reaches \( 2^{n+1}-1 \) against \( 2n+1 \) undilated; and the parameter-ratio payoff.<span class="bch"> Ch. 4</span></span></li>
+<li><span class="bnum">11</span><span class="bbody">Gradient horizon \( t > \ln\epsilon/\ln f \); the gate bias \( b = \ln\frac{f}{1-f} \); dropout compounding per time step versus per layer.<span class="bch"> Ch. 5</span></span></li>
+<li><span class="bnum">12</span><span class="bbody">Recurrent layer parameter count \( 4d_h(d_{\text{in}} + d_h + 1) \), assembled into a full model, and the embedding-plus-readout fraction.<span class="bch"> Ch. 5</span></span></li>
+<li><span class="bnum">13</span><span class="bbody">Power-law slope extraction from a &ldquo;per tenfold&rdquo; statement, and extrapolation to a target improvement.<span class="bch"> Ch. 5</span></span></li>
+<li><span class="bnum">14</span><span class="bbody">Score variance \( \operatorname{Var}(q\cdot k) = d \) forcing the \( 1/\sqrt{d} \) scale; attention \( 2n^2d \) and feed-forward \( 8nd^2 \) costs and their crossover at \( n = 4d \); temperature as monotone logit scaling.<span class="bch"> Ch. 6</span></span></li>
+<li><span class="bnum">15</span><span class="bbody">Reversal-trick lags: unreversed lag \( n \) everywhere, reversed lag \( 2j-1 \), mean exactly \( n \), maximum worse.<span class="bch"> Ch. 6</span></span></li>
+<li><span class="bnum">16</span><span class="bbody">The transformer block's parameter count: \( 3d^2 \) of query, key and value projections with the head count cancelling, \( d^2 \) of output projection and \( 8d^2 \) of feed-forward &mdash; \( 12d^2 \) per layer.<span class="bch"> Ch. 6</span></span></li>
+<li><span class="bnum">17</span><span class="bbody">The compute-optimal allocation: substitute, differentiate, obtain \( aAN^{-a} = bBD^{-b} \), and read off \( N \propto C^{b/(a+b)} \), \( D \propto C^{a/(a+b)} \). <span class="protocol">protocol</span><span class="bch"> Ch. 7</span></span></li>
+<li><span class="bnum">18</span><span class="bbody">The halving cost \( 2^{1/\alpha} \) for a loss term \( \propto N^{-\alpha} \), and re-budgeting a model at a target token ratio under fixed compute.<span class="bch"> Ch. 7</span></span></li>
+<li><span class="bnum">19</span><span class="bbody">Pipeline completion time \( M + P - 1 \) from a timing diagram, and the bubble fraction \( \frac{P-1}{M+P-1} \) with both boundary cases.<span class="bch"> Ch. 8</span></span></li>
+<li><span class="bnum">20</span><span class="bbody">Optimizer-state sharding arithmetic, always with the unsharded total computed first.<span class="bch"> Ch. 8</span></span></li>
+<li><span class="bnum">21</span><span class="bbody">The sixteen bytes per parameter of mixed-precision training, itemised, and which of them freezing a parameter removes.<span class="bch"> Ch. 8</span></span></li>
+<li><span class="bnum">22</span><span class="bbody">Activation memory per token per layer, and the checkpointing optimum \( g = \sqrt{L} \) from minimising \( g + L/g \), bought with about a third more arithmetic.<span class="bch"> Ch. 8</span></span></li>
+<li><span class="bnum">23</span><span class="bbody">Communication per axis of parallelism: \( 2N \) bytes per device per step for data parallelism, activations per layer for tensor parallelism, stage boundaries for pipelining.<span class="bch"> Ch. 8</span></span></li>
+<li><span class="bnum">24</span><span class="bbody">Exact-match accuracy \( p^k \), its 50% frontier at \( p = 2^{-1/k} \), and the manufactured-cliff argument.<span class="bch"> Ch. 9</span></span></li>
+<li><span class="bnum">25</span><span class="bbody">Contamination: observed \( = c + p(1-c) \), inverted for \( c \), and the Bayes flip \( P(\text{contaminated}\mid\text{correct}) = c/\text{observed} \).<span class="bch"> Ch. 9</span></span></li>
+<li><span class="bnum">26</span><span class="bbody">Two-part codes: model bits plus residual bits, model selection by the minimum, and hypothesis odds \( 2^{\Delta} \).<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">27</span><span class="bbody">Cross-entropy as a literal file size; tokens times bits per token divided by eight.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">28</span><span class="bbody">The Gaussian coding cost of a weight, its zero case, its divergence as precision rises, and the noisy-weights-are-cheap reading.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">29</span><span class="bbody">The length prior \( 2^{-\ell} \): Kraft, posterior mixtures over consistent programs, and the theorem that each extra bit halves the vote.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">30</span><span class="bbody">Typicality versus membership, via randomness deficiency \( \log_2|M| - K(x) \).<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">31</span><span class="bbody">The OLS excess risk \( \sigma^2 p/(n-p-1) \) and its divergence at the interpolation threshold; grokking as a code-length transition.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">32</span><span class="bbody">The universal intelligence measure \( \Upsilon = \sum_i 2^{-K_i}V_i \) with its three properties.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">33</span><span class="bbody">The reward-seizing threshold \( r > (1-\gamma)/\gamma \), from the geometric series.<span class="bch"> Ch. 10</span></span></li>
+<li><span class="bnum">34</span><span class="bbody">Bits per token divided by the tokenizer's compression ratio gives bits per character, the only figure that compares two models with different vocabularies.<span class="bch"> Ch. 10</span></span></li>
 </ol>
 
 <h2>Part III &middot; The Modern Era</h2>
-<ol class="bank" start="27">
-<li><span class="bnum">27</span><span class="bbody">KV cache size \( 2\,L\,H_{kv}\,d_{\text{head}}\,s\,B\,\beta \), derived from what is stored and per what.<span class="bch"> Ch. 10</span></span></li>
-<li><span class="bnum">28</span><span class="bbody">Arithmetic intensity and the ridge point; the intensity of a large matmul, of batch-1 decode, and of batch-\( B \) decode.<span class="bch"> Ch. 10</span></span></li>
-<li><span class="bnum">29</span><span class="bbody">The decode ceiling &mdash; bandwidth divided by weight bytes &mdash; and the model FLOP utilization formula.<span class="bch"> Ch. 10</span></span></li>
-<li><span class="bnum">30</span><span class="bbody">Streaming softmax: the running maximum and normalizer update, with the value accumulator's rescaling, and a numerical verification that it is exact.<span class="bch"> Ch. 11</span></span></li>
-<li><span class="bnum">31</span><span class="bbody">Speculative decoding's exactness: acceptance at \( \min(1, p/q) \), residual resampling, and the proof that the emitted distribution is \( p \).<span class="bch"> Ch. 11</span></span></li>
-<li><span class="bnum">32</span><span class="bbody">Expected tokens per verification cycle \( \frac{1-\alpha^{k+1}}{1-\alpha} \), the speedup expression, and the marginal condition for \( k \).<span class="bch"> Ch. 11</span></span></li>
-<li><span class="bnum">33</span><span class="bbody">Mixture-of-experts accounting: total versus active parameters, the auxiliary balance loss and its uniform minimum, and capacity-based dropping.<span class="bch"> Ch. 12</span></span></li>
-<li><span class="bnum">34</span><span class="bbody">Quantization error \( \Delta^2/12 \), with the quarter-per-bit law and the \( R^2 \) range sensitivity.<span class="bch"> Ch. 12</span></span></li>
-<li><span class="bnum">35</span><span class="bbody">Low-rank adaptation's \( 2rd \) trainable parameters, and the three-budget map of which technique relieves which resource.<span class="bch"> Ch. 12</span></span></li>
-<li><span class="bnum">36</span><span class="bbody">Preference modelling: the logistic comparison loss, identifiability up to a constant, and the KL-tethered objective. Plus the clipped surrogate's four regimes and where the gradient dies.<span class="bch"> Ch. 13</span></span></li>
-<li><span class="bnum">37</span><span class="bbody">The preference-optimization collapse: closed-form optimum, inversion for the reward, substitution into the comparison model, and the exact cancellation of the normalizer. Plus group-relative advantages and the degenerate-group case. <span class="protocol">protocol</span><span class="bch"> Ch. 13</span></span></li>
-<li><span class="bnum">38</span><span class="bbody">Coverage \( 1-(1-p)^k \) with a selector's multiplier; the voting threshold at \( p = \tfrac12 \); the diffusion forward process \( q(x_t\mid x_0) \) by Gaussian composition, guidance as extrapolation; and the lifecycle cost \( 6ND + 2NT \) with its break-even lifetime.<span class="bch"> Ch. 14&ndash;16</span></span></li>
+<ol class="bank">
+<li><span class="bnum">35</span><span class="bbody">KV cache size \( 2\,L\,H_{kv}\,d_{\text{head}}\,s\,B\,\beta \), derived from what is stored and per what.<span class="bch"> Ch. 11</span></span></li>
+<li><span class="bnum">36</span><span class="bbody">Arithmetic intensity and the ridge point; the intensity of a large matmul, of batch-1 decode, and of batch-\( B \) decode.<span class="bch"> Ch. 11</span></span></li>
+<li><span class="bnum">37</span><span class="bbody">The decode ceiling &mdash; bandwidth divided by weight bytes &mdash; and the model FLOP utilization formula.<span class="bch"> Ch. 11</span></span></li>
+<li><span class="bnum">38</span><span class="bbody">Streaming softmax: the running maximum and normalizer update, with the value accumulator's rescaling, and a numerical verification that it is exact.<span class="bch"> Ch. 12</span></span></li>
+<li><span class="bnum">39</span><span class="bbody">Speculative decoding's exactness: acceptance at \( \min(1, p/q) \), residual resampling, and the proof that the emitted distribution is \( p \).<span class="bch"> Ch. 12</span></span></li>
+<li><span class="bnum">40</span><span class="bbody">Expected tokens per verification cycle \( \frac{1-\alpha^{k+1}}{1-\alpha} \), the speedup expression, and the marginal condition for \( k \).<span class="bch"> Ch. 12</span></span></li>
+<li><span class="bnum">41</span><span class="bbody">Mixture-of-experts accounting: total versus active parameters, the auxiliary balance loss and its uniform minimum, and capacity-based dropping.<span class="bch"> Ch. 13</span></span></li>
+<li><span class="bnum">42</span><span class="bbody">Quantization error \( \Delta^2/12 \), with the quarter-per-bit law and the \( R^2 \) range sensitivity.<span class="bch"> Ch. 13</span></span></li>
+<li><span class="bnum">43</span><span class="bbody">Low-rank adaptation's \( 2rd \) trainable parameters, and the three-budget map of which technique relieves which resource.<span class="bch"> Ch. 13</span></span></li>
+<li><span class="bnum">44</span><span class="bbody">Preference modelling: the logistic comparison loss, identifiability up to a constant, and the KL-tethered objective. Plus the clipped surrogate's four regimes and where the gradient dies.<span class="bch"> Ch. 14</span></span></li>
+<li><span class="bnum">45</span><span class="bbody">The preference-optimization collapse: closed-form optimum, inversion for the reward, substitution into the comparison model, and the exact cancellation of the normalizer. Plus group-relative advantages and the degenerate-group case. <span class="protocol">protocol</span><span class="bch"> Ch. 14</span></span></li>
+<li><span class="bnum">46</span><span class="bbody">Coverage \( 1-(1-p)^k \) with a selector's multiplier, and the voting threshold at \( p = \tfrac12 \) below which majority vote amplifies error.<span class="bch"> Ch. 15</span></span></li>
+<li><span class="bnum">47</span><span class="bbody">Eliciting versus creating: which interventions redistribute probability the model already has, and which change \( p \) itself.<span class="bch"> Ch. 15</span></span></li>
+<li><span class="bnum">48</span><span class="bbody">The diffusion forward process \( q(x_t\mid x_0) \) by Gaussian composition, the signal-to-noise schedule, and the variance check that the coefficients square to one.<span class="bch"> Ch. 16</span></span></li>
+<li><span class="bnum">49</span><span class="bbody">Guidance as extrapolation beyond the conditional prediction, and the stride cost \( \lceil T/k \rceil \).<span class="bch"> Ch. 16</span></span></li>
+<li><span class="bnum">50</span><span class="bbody">The lifecycle cost \( 6ND + 2NT \), its break-even lifetime, and the interior optimum that makes "train smaller and longer" a calculation rather than a slogan.<span class="bch"> Ch. 17</span></span></li>
 </ol>
 
 <h2>Synthesis</h2>

@@ -28,23 +28,24 @@ SUBTITLE = ("A problem course in modern machine learning, from the pathological 
             "valley to direct preference optimization.")
 AUTHOR = "Anshu Avinash"
 FIG_CAPTION = ("Gradient descent and momentum on an ill-conditioned valley "
-               "&mdash; Chapter 2")
+               "&mdash; Chapter 3")
 
 # (file, part divider to emit before it or None)
 ORDER = [
     ("chapter-01.html", "Part I &middot; Foundations"),
-    ("chapter-02.html", "Part II &middot; The Classical Era"),
-    ("chapter-03.html", None), ("chapter-04.html", None),
-    ("chapter-05.html", None), ("chapter-06.html", None),
-    ("chapter-07.html", None), ("chapter-08.html", None),
-    ("chapter-09.html", None),
-    ("chapter-10.html", "Part III &middot; The Modern Era"),
-    ("chapter-11.html", None), ("chapter-12.html", None),
-    ("chapter-13.html", None), ("chapter-14.html", None),
-    ("chapter-15.html", None), ("chapter-16.html", None),
+    ("chapter-02.html", None),
+    ("chapter-03.html", "Part II &middot; The Classical Era"),
+    ("chapter-04.html", None), ("chapter-05.html", None),
+    ("chapter-06.html", None), ("chapter-07.html", None),
+    ("chapter-08.html", None), ("chapter-09.html", None),
+    ("chapter-10.html", None),
+    ("chapter-11.html", "Part III &middot; The Modern Era"),
+    ("chapter-12.html", None), ("chapter-13.html", None),
+    ("chapter-14.html", None), ("chapter-15.html", None),
+    ("chapter-16.html", None), ("chapter-17.html", None),
     ("appendix-a.html", "Appendices"),
     ("appendix-b.html", None), ("appendix-c.html", None),
-    ("appendix-d.html", None),
+    ("appendix-d.html", None), ("appendix-e.html", None),
 ]
 
 # The typeface files to embed: (css family name, package, filename pattern, variants)

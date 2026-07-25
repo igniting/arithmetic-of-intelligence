@@ -1,0 +1,9 @@
+# Known audit failures, accepted for now.
+#
+# EMPTY. Every defect the second-edition work inherited has been fixed, and
+# the audit now passes on its own terms rather than against a list.
+#
+# The ratchet stays in place: if a check starts failing, the build breaks.
+# Adding a line here to silence a new failure is the one thing this file is
+# not for. It exists so that a large, scheduled body of fixes could land
+# incrementally without leaving CI red for weeks -- and that work is done.

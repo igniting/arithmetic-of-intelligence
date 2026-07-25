@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 4 · Memory and Gates — The Arithmetic of Intelligence</title>
+<title>Chapter 4 · The Architecture of Depth — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,147 +24,178 @@
 
 <header class="opener">
   <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 4</span>
-  <h1 class="ch">Memory and Gates</h1>
-  <p class="ch-blurb">A recurrent network remembers by multiplying. Whatever is multiplied a thousand times either vanishes or explodes &mdash; unless something pins the factor to one. That pin is the whole story.</p>
+  <h1 class="ch">The Architecture of Depth</h1>
+  <p class="ch-blurb">If optimization is so sensitive to the shape of the loss surface, perhaps we can build networks whose surfaces are easier to descend. That idea, made concrete, is the residual connection.</p>
 </header>
 
-<p class="lead">A recurrent network remembers by multiplying. To carry information from step one to step three hundred, it must pass that information through three hundred multiplications, and whatever survives is what the network can recall. Multiply anything by 0.95 three hundred times and you have nothing left. Multiply by 1.0 and you have everything. Almost everything in this chapter follows from that observation.</p>
-<p>Learning long-range structure requires a gradient to travel backward across many steps, and backward travel across a recurrence is a <em>product</em> of per-step factors. Chapter 3 showed what long products do: they die or explode unless something holds them in check. Here the same problem reappears along the time axis rather than the depth axis, and the fix has the same character. What follows derives the horizon over which memory survives, the single constant that sets it, and a consequence for regularization that catches most people out.</p>
+<p class="lead">Suppose you have a network that works at twenty layers and you want one that works at a hundred. You add eighty more layers of the same kind and train it the same way. It gets <em>worse</em> &mdash; and not on held-out data, where you might blame overfitting, but on the training set itself. Something about depth is defeating the optimizer. The fix, when it came, was a single addition sign.</p>
+<p>We begin with the humblest ingredient, the convolution, because its costs are pure counting and because those counts recur every time we compare two designs. Then we turn to the central innovation of the era, the residual connection, and find that its single line of algebra conceals three separate theorems. We close with dilation, a way to see far across an image without paying for the privilege.</p>
 
-<h2>4.1 The gradient horizon</h2>
-<p>Backpropagation through time multiplies the gradient, at each step, by a factor governing how much the state at one step influenced the next. Call that factor \( f \). After \( t \) steps the gradient carries \( f^t \). If \( f < 1 \), the influence decays geometrically; the number of steps over which a gradient survives is a logarithm problem of exactly the kind Chapter 1 drilled.</p>
+<h2>4.1 The arithmetic of convolution</h2>
+<p>A convolutional layer slides a small kernel across a grid, computing at each position a weighted sum of a local patch. Three quantities describe its cost, and all three are bookkeeping. First, the spatial size of the output: for an input of side \( n \), a kernel of side \( k \), padding \( p \), and stride \( s \),</p>
+\[ n_{\text{out}} = \left\lfloor \frac{n + 2p - k}{s} \right\rfloor + 1. \]
+<p>The floor is not a formality &mdash; it is where a great many arithmetic slips are born, because a fractional result must be truncated, not rounded. Second, the parameter count. A layer mapping \( C_{\text{in}} \) input channels to \( C_{\text{out}} \) output channels, with a kernel of side \( k \), holds \( k^2 C_{\text{in}} \) weights per output channel plus one bias each:</p>
+\[ \text{params} = (k^2 C_{\text{in}} + 1)\,C_{\text{out}}. \]
+<p>Forget the \( +1 \) and you will be a bias term short on every layer &mdash; a small error that the exercises will punish. Third, the arithmetic cost: producing one output pixel takes \( k^2 C_{\text{in}} C_{\text{out}} \) multiply&ndash;accumulate operations, and you multiply by the number of output pixels to get the layer's total.</p>
 
-<div class="box deriv">
-<span class="label">Derivation 4.1</span>
-<p class="title">How far back memory reaches</p>
-<p>A gradient scaled by \( f \) per step falls below a fraction \( \epsilon \) of its original size after \( t \) steps, where \( f^t < \epsilon \), i.e.</p>
-\[ t > \frac{\ln \epsilon}{\ln f}. \]
-<p>Both logarithms are negative for \( f < 1 \) and \( \epsilon < 1 \), so \( t \) is positive. With \( f = 0.95 \) and \( \epsilon = 0.01 \): \( t > \ln(0.01)/\ln(0.95) = (-4.605)/(-0.0513) = 89.8 \), so the gradient is gone after about 90 steps. With \( f = 0.5 \), the horizon collapses to \( \ln(0.01)/\ln(0.5) \approx 6.6 \) steps &mdash; a network that cannot see past the last handful of tokens.</p>
-<p>The critical case is \( f = 1 \). Then \( f^t = 1 \) for all \( t \): the gradient neither decays nor grows, and memory reaches arbitrarily far back. A recurrent cell that could hold its per-step factor at exactly one would have, in principle, unbounded memory. This is the target the gated cell was built to hit.</p>
-</div>
-
-<p>The device that hits it is the <em>forget gate</em>. The gated cell maintains a memory that is multiplied each step not by a fixed weight but by a gate value \( f \in (0,1) \) that the network computes. When the network wants to remember, it drives the gate toward one, and the memory is carried forward almost untouched &mdash; the &ldquo;constant-error carousel&rdquo; that gives the gradient a clear channel across time. When it wants to forget, it drives the gate down. The horizon is no longer a fixed property of the architecture; it is something the network sets, token by token.</p>
-
-<h2>4.2 Setting the gate by its bias</h2>
-<p>A gate is produced by a squashing function of a learned pre-activation: \( f = \sigma(z) \), where \( \sigma \) is the logistic function and \( z \) includes a bias term. At the start of training, before the input-dependent part has learned anything, the gate sits at \( \sigma(b) \) for bias \( b \). If we want the cell to <em>default</em> to remembering &mdash; a sensible prior for tasks with long dependencies &mdash; we should choose \( b \) so that \( \sigma(b) \) is close to one.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 4.2</span>
-<p class="title">The bias for a chosen default memory</p>
-<p>To make the forget gate open to a value \( f \) at initialization, invert the logistic: \( f = \sigma(b) = \frac{1}{1+e^{-b}} \) gives</p>
-\[ b = \ln\frac{f}{1-f}. \]
-<p>For \( f = 0.95 \): \( b = \ln(0.95/0.05) = \ln 19 = 2.94 \). Initializing the forget-gate bias near 3, rather than 0, starts the network with a memory horizon of about 90 steps (by Derivation 4.1) instead of the roughly 7 steps that \( b = 0 \), \( f = 0.5 \) would give. A single constant, chosen by a one-line inversion, changes the default reach of the network by an order of magnitude &mdash; which is why high forget-gate bias is standard practice.</p>
+<div class="box worked">
+<span class="label">Worked Example 4.1</span>
+<p class="title">Tracing a dimension through the opening layers</p>
+<p>A \( 227 \times 227 \times 3 \) image enters a layer of 96 kernels, each \( 11 \times 11 \), stride 4, no padding; the result passes through a \( 3 \times 3 \) max-pool at stride 2. Trace the spatial size and count the convolution's parameters.</p>
+<p>Convolution output side: \( \lfloor (227 - 11)/4 \rfloor + 1 = \lfloor 216/4 \rfloor + 1 = 54 + 1 = 55 \). Pooling output side: \( \lfloor (55 - 3)/2 \rfloor + 1 = \lfloor 52/2 \rfloor + 1 = 26 + 1 = 27 \). So the feature map is \( 27 \times 27 \). Parameters in the convolution: \( (11^2 \cdot 3 + 1)\cdot 96 = (363 + 1)\cdot 96 = 364 \cdot 96 = 34{,}944 \). Drop the bias and you get \( 34{,}848 \) &mdash; the classic off-by-a-bias mistake.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 4.1</span>
-<p>(a) What forget-gate value gives a horizon (to the 1% level) of about 300 steps? (b) What bias produces it?</p>
-<details><summary>Show answers</summary>
-<p>(a) Need \( \ln(0.01)/\ln f = 300 \Rightarrow \ln f = -4.605/300 = -0.01535 \Rightarrow f = 0.9848 \). (b) \( b = \ln(0.9848/0.0152) = \ln(64.8) = 4.17 \).</p>
+<p>A \( 55 \times 55 \) feature map passes through two successive \( 3 \times 3 \) max-pools, each at stride 2, no padding. What is the final spatial side?</p>
+<details><summary>Show answer</summary>
+<p>First pool: \( \lfloor (55-3)/2 \rfloor + 1 = 27 \). Second: \( \lfloor (27-3)/2 \rfloor + 1 = 13 \). Final side \( 13 \).</p>
 </details>
 </div>
 
-<h2>4.3 Why dropout must respect the recurrent path</h2>
-<p>This next result catches almost everyone, including people who have used these networks for years. Dropout regularizes a network by randomly zeroing a fraction of its signals during training. On a feedforward network this is benign. On a recurrent network, <em>where</em> you apply it decides whether the network can remember at all &mdash; and the reason is once again the compounding of a per-step factor.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 4.3</span>
-<p class="title">Noise on the recurrent path compounds in time</p>
-<p>Suppose dropout with keep-probability \( 0.9 \) were applied to the memory as it is carried from each step to the next &mdash; on the recurrent path itself. Then over a sequence of 100 steps, the probability that a particular piece of state survives untouched is \( 0.9^{100} \). By Chapter 1's logarithm reflex, \( 0.9^{100} = e^{100\ln 0.9} = e^{-10.54} = 2.7\times 10^{-5} \). The carried memory is annihilated; the very pathway the forget gate worked to protect is destroyed by noise applied a hundred times over.</p>
-<p>Now suppose instead the dropout is applied only to the <em>vertical</em> connections &mdash; the ones feeding from layer to layer at a single time step, not from step to step. Then a given piece of information is perturbed a number of times equal to the network's <em>depth</em>, perhaps two or three, regardless of how long the sequence is. The regularization does its job on the transformations between layers while leaving the memory-carrying pathway deterministic. That contrast &mdash; noise that compounds per time step versus noise that compounds per layer &mdash; is the entire content of a well-known result on recurrent regularization.</p>
-</div>
-
-<div class="box trap">
-<span class="label">Trap &middot; T5</span>
-<p>It is tempting to think inverted dropout's rescaling &mdash; dividing surviving signals by the keep-probability to preserve the mean &mdash; makes recurrent-path dropout harmless. It does not. Rescaling fixes the <em>expectation</em>, but multiplicative noise compounds in <em>variance</em>, and it is the variance that destroys the carried state over a long sequence. The design goal is not an unbiased mean; it is a memory pathway that stays deterministic.</p>
-</div>
-
-<h2>4.4 Counting the parameters of a recurrent layer</h2>
-<p>Before we leave recurrence, a piece of bookkeeping we will reuse. A gated cell computes four quantities per step &mdash; a candidate update and three gates &mdash; each a linear map of the concatenated input and previous hidden state, plus a bias. For input width \( d_{\text{in}} \) and hidden width \( d_h \), each of the four maps has \( d_h(d_{\text{in}} + d_h) \) weights and \( d_h \) biases, so the layer holds</p>
-\[ 4\,d_h\,(d_{\text{in}} + d_h + 1) \]
-<p>parameters. Assemble a full model from these and a pattern emerges worth noticing.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 4.1</span>
-<p class="title">Where the parameters actually are</p>
-<p>Take a language model with an embedding of width 1500 over a vocabulary of 10,000; two stacked recurrent layers each of hidden width 1500 (the first fed by the embedding); and an untied output projection back to the vocabulary, with a bias. Count each part.</p>
-<p>Embedding: \( 10{,}000 \times 1500 = 15{,}000{,}000 \). First recurrent layer: \( 4 \times 1500 \times (1500 + 1500 + 1) = 6000 \times 3001 = 18{,}006{,}000 \). Second layer: identical, \( 18{,}006{,}000 \). Output projection: \( 1500 \times 10{,}000 + 10{,}000 = 15{,}010{,}000 \). Total: \( 66{,}022{,}000 \), about 66 million.</p>
-<p>Notice that the embedding and output projection together are \( 30 \) million &mdash; about \( 45\% \) of the model &mdash; yet neither adds any depth; they are lookup and readout. This is precisely why scaling studies, when they relate capability to size, count <em>non-embedding</em> parameters: the vocabulary tables scale with vocabulary, not with the model's actual computational depth.</p>
-</div>
+<p>One design decision recurs so often it deserves its own note: replacing a single large kernel with a stack of small ones. Two stacked \( 3\times3 \) convolutions see the same \( 5\times5 \) input region as one \( 5\times5 \) convolution &mdash; the receptive fields match &mdash; but the stack holds fewer weights and applies its nonlinearity twice instead of once. For \( C \) channels throughout, one \( 5\times5 \) layer holds \( 25C^2 \) weights; two \( 3\times3 \) layers hold \( 2 \times 9C^2 = 18C^2 \). The stack is cheaper <em>and</em> more expressive, which is why deep stacks of tiny kernels displaced wide ones.</p>
 
 <div class="drill">
 <span class="label">Drill 4.2</span>
-<p>A single recurrent layer has input width 512 and hidden width 512. How many parameters does it hold?</p>
+<p>With \( C = 256 \) channels, how many weights are saved by replacing one \( 5\times5 \) convolution with two stacked \( 3\times3 \) convolutions? Give the answer to the nearest thousand.</p>
 <details><summary>Show answer</summary>
-<p>\( 4 \times 512 \times (512 + 512 + 1) = 2048 \times 1025 = 2{,}099{,}200 \), about 2.1 million.</p>
+<p>\( 25C^2 - 18C^2 = 7C^2 = 7 \times 65{,}536 = 458{,}752 \), about \( 459{,}000 \).</p>
 </details>
 </div>
 
-<h2>4.5 Data as a lever: power laws in the wild</h2>
-<p>Recurrent models were where the field first watched error fall as a clean power law in the quantity of training data &mdash; and where the brutal economics of that law became visible. The reflex from Chapter 1, extracting an exponent from a &ldquo;per tenfold&rdquo; statement, is all we need to reason about it.</p>
+<h2>4.2 The residual connection, and the three theorems inside it</h2>
+<p>A residual block does not compute a new representation from scratch; it computes a <em>correction</em> to its input. Writing \( h_\ell \) for the activations after block \( \ell \), a residual block sets</p>
+\[ h_\ell = h_{\ell-1} + F_\ell(h_{\ell-1}), \]
+<p>where \( F_\ell \) is the block's learned transformation. The added \( h_{\ell-1} \) &mdash; the &ldquo;skip&rdquo; or &ldquo;identity&rdquo; path &mdash; looks almost too simple to matter. It matters three separate ways, and untangling them is the heart of this chapter.</p>
+
+<h3>First theorem: the gradient has a floor</h3>
+<p>Consider how a gradient travels backward through the stack. The sensitivity of the output to the input is a product of per-block Jacobians. For a residual block, that Jacobian is \( I + J_\ell \), where \( J_\ell \) is the Jacobian of \( F_\ell \) alone. Across \( L \) blocks,</p>
+\[ \frac{\partial h_L}{\partial h_0} = \prod_{\ell=1}^{L} (I + J_\ell). \]
+<p>Expand this product and something remarkable appears.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 4.1</span>
+<p class="title">The indestructible identity</p>
+<p>Multiplying out \( \prod_{\ell=1}^{L}(I + J_\ell) \), each factor contributes either its \( I \) or its \( J_\ell \). A term that takes \( J \) from exactly \( k \) of the factors, and \( I \) from the rest, is a product of \( k \) Jacobians; there are \( \binom{L}{k} \) such terms. The expansion is thus organized by how many blocks a path passes through:</p>
+\[ \frac{\partial h_L}{\partial h_0} = \underbrace{I}_{k=0} + \underbrace{\sum_\ell J_\ell}_{k=1} + \underbrace{\sum_{i<j} J_j J_i}_{k=2} + \cdots \]
+<p>Look at the \( k=0 \) term: it is the bare identity \( I \), formed by taking \( I \) from every factor. It contains none of the \( J_\ell \), so no amount of shrinking the individual Jacobians can destroy it. However small every \( F_\ell \) becomes, the gradient still contains an undiminished identity path from output to input.</p>
+<p>Contrast a plain network, whose Jacobian is the product \( \prod_\ell J_\ell \) with no added identities. If those Jacobians are even slightly contractive, their product shrinks geometrically with depth &mdash; the vanishing gradient. The residual network's guarantee is exactly the surviving \( I \): a floor beneath the gradient that the plain network lacks.</p>
+</div>
+
+<h3>Second theorem: depth is an ensemble of shallow paths</h3>
+<p>The expansion above has a second reading. Each term is a <em>path</em>: a choice, at each block, of whether to pass through the transformation or skip it. There are \( 2^L \) such paths, and a path's &ldquo;length&rdquo; is the number of blocks it actually traverses. How long is a typical path? Since each block is independently taken or skipped, the length of a random path is a sum of \( L \) independent coin flips &mdash; a binomial distribution, exactly the object Chapter 1 prepared.</p>
+
+<p>Ask yourself first what you expect the answer to be. A network with fifty-four residual blocks contains paths of every length from zero to fifty-four. If you had to guess the typical path length, you might reasonably say &ldquo;most of them are long, since the network is deep.&rdquo; Hold that thought; the arithmetic is about to disagree with it, and the disagreement is the entire reason very deep residual networks train at all.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 4.2</span>
+<p class="title">Most paths are short</p>
+<p>Model each block as traversed with probability \( \tfrac12 \). A path's length is then \( \text{Binomial}(L, \tfrac12) \), with mean \( L/2 \) and variance \( L/4 \). For \( L = 54 \) blocks, the mean length is 27 and the standard deviation is \( \sqrt{54/4} = \sqrt{13.5} = 3.674 \).</p>
+<p>What fraction of paths have length between 20 and 34? Using the normal approximation with a half-unit continuity correction, the standardized endpoints are \( (19.5 - 27)/3.674 = -2.04 \) and \( (34.5 - 27)/3.674 = +2.04 \). The enclosed probability is \( 2\Phi(2.04) - 1 = 2(0.9793) - 1 = 0.959 \).</p>
+<p>So about \( 96\% \) of the paths through a 54-block network &mdash; a network more than a hundred layers deep &mdash; traverse between 20 and 34 blocks. The network behaves less like one very deep chain and more like an <em>ensemble of many moderately shallow paths</em>. Depth, in a residual network, is a reservoir of shallow routes, not a single long one; and gradients flow easily precisely because most routes are short.</p>
+</div>
+
+<h3>Third theorem: signals drift, so normalization belongs inside</h3>
+<p>The third consequence is about scale. Each block adds its correction to the running signal. If those corrections are roughly independent and zero-mean, then by Chapter 1's variance algebra their accumulated effect at any fixed coordinate grows in variance like the number of blocks &mdash; standard deviation like \( \sqrt{L} \).</p>
 
 <div class="box worked">
 <span class="label">Worked Example 4.2</span>
-<p class="title">The price of halving an error</p>
-<p>Suppose a speech system's word error rate obeys a power law in training hours, and each tenfold increase in data yields a \( 40\% \) relative reduction in error. Then error \( \propto D^{\beta} \) with \( 10^{\beta} = 0.6 \), so \( \beta = \log_{10} 0.6 = -0.222 \). To <em>halve</em> the error we need \( 10^{\beta x} = 0.5 \), i.e. \( x = \log_{10}(0.5)/0.222 = 0.301/0.222 = 1.36 \) decades of data &mdash; a factor of \( 10^{1.36} = 22.7 \).</p>
-<p>Starting from a \( 10\% \) error at 12,000 hours, reaching \( 5\% \) therefore demands about \( 12{,}000 \times 22.7 \approx 273{,}000 \) hours. Each halving of error costs a roughly twenty-three-fold multiplication of data. Power laws are smooth and dependable, but they are not cheap &mdash; a theme Chapter 6 will make the center of the story.</p>
+<p class="title">Square-root drift</p>
+<p>Suppose each of \( L = 100 \) blocks adds, at a fixed output coordinate, an independent zero-mean perturbation of variance \( 0.01 \). The accumulated variance is \( 100 \times 0.01 = 1 \), so the standard deviation is \( 1.0 \) &mdash; comparable to the signal itself. Had we used \( L = 400 \) blocks, the drift would be \( \sqrt{4} = 2 \). The signal swells as it descends the stack.</p>
+<p>This is why normalization layers are placed <em>inside</em> the residual branch, rescaling \( F_\ell \)'s output before it is added, rather than on the skip path. Keep the identity path clean and controlled, and let the normalization tame the drifting correction &mdash; a design that the &ldquo;pre-activation&rdquo; residual block makes explicit.</p>
+</div>
+
+<h3>The bottleneck: buying depth cheaply</h3>
+<p>A last piece of residual arithmetic concerns cost. Very deep networks cannot afford full-width \( 3\times3 \) convolutions at every block, so the bottleneck block compresses the channels first: a \( 1\times1 \) convolution reduces \( C \) channels to \( C/c \), a \( 3\times3 \) operates in that narrow space, and a final \( 1\times1 \) restores the width. Because the expensive \( 3\times3 \) now runs on \( 1/c \) of the channels, it costs \( 1/c^2 \) as much.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 4.3</span>
+<p class="title">Seventeen to one</p>
+<p>Compare, at one spatial position with 256 channels, two stacked \( 3\times3 \) convolutions against a bottleneck with compression \( c=4 \) (256 down to 64). The plain pair costs \( 2 \cdot 9 \cdot 256^2 = 1{,}179{,}648 \) multiply&ndash;accumulates. The bottleneck costs \( (256\cdot 64) + (9\cdot 64^2) + (64\cdot 256) = 16{,}384 + 36{,}864 + 16{,}384 = 69{,}632 \). The ratio is \( 16.9 \), close to 17 to 1. The narrow middle is where nearly all the saving lives.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 4.3</span>
-<p>A different system improves \( 30\% \) relative per tenfold data increase. What data multiple halves its error?</p>
+<p>At compression \( c = 8 \) (256 channels down to 32), estimate the bottleneck's MAC ratio against the plain \( 3\times3 \) pair. (Use the same structure: two \( 1\times1 \) layers plus one \( 3\times3 \) in the narrow space, all at 256 outer channels.)</p>
 <details><summary>Show answer</summary>
-<p>\( 10^\beta = 0.7 \Rightarrow \beta = \log_{10}0.7 = -0.155 \). Halving: \( x = 0.301/0.155 = 1.94 \) decades \( = 10^{1.94} \approx 88\times \).</p>
+<p>Plain pair \( = 18C^2 \). Bottleneck \( = C\cdot(C/8) + 9(C/8)^2 + (C/8)\cdot C = C^2/8 + 9C^2/64 + C^2/8 = C^2(8/64 + 9/64 + 8/64) = 25C^2/64 \). Ratio \( = 18/(25/64) = 18 \times 64/25 \approx 46 \) to 1.</p>
 </details>
 </div>
 
-<h2>4.6 What the chapter bought</h2>
-<p>Memory in a recurrent network is a per-step factor held near one; the horizon over which it survives is a logarithm, and the gate's initial bias sets that horizon by a one-line inversion. Regularization must respect the distinction between noise that compounds in time and noise that compounds in depth &mdash; a distinction that decides whether the network can remember at all. And error falls as a power law in data whose exponent you can read straight off a &ldquo;per tenfold&rdquo; statement, with consequences for cost that scale is about to make unavoidable. Chapter 5 introduces the mechanism that replaced the recurrent product entirely: attention, which reaches any past token in a single step, and whose own design choices &mdash; the \( \sqrt{d} \) scaling chief among them &mdash; fall straight out of the variance algebra we have been using all along.</p>
+<h2>4.3 Dilation: seeing far without paying for it</h2>
+<p>Some tasks &mdash; labeling every pixel of an image, say &mdash; need each output to depend on a wide swath of input, yet must not blur away fine detail by pooling. Dilation resolves the tension. A dilated kernel spreads its taps apart, leaving gaps: a \( 3\times3 \) kernel with dilation \( r \) still has nine weights, but they sample a region \( (2r+1) \) wide. Stacking dilated layers grows the reach geometrically while the parameter count grows not at all per layer.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 4.3</span>
+<p class="title">Exponential reach for linear cost</p>
+<p>Adding a \( 3\times3 \) layer of dilation \( r \) extends the receptive field by \( 2r \) on each axis: its outer taps reach \( r \) beyond the current field on each side. So a stack with dilations \( 1, 2, 4, \dots, 2^{n-1} \) has receptive field</p>
+\[ 1 + 2(1 + 2 + 4 + \cdots + 2^{n-1}) = 1 + 2(2^n - 1) = 2^{n+1} - 1. \]
+<p>An undilated stack, by contrast, grows its field by 2 per layer, reaching only \( 2n + 1 \) after \( n \) layers &mdash; linear, not exponential. To cover a \( 31\times31 \) field, the dilated stack needs \( n = 4 \) layers (\( 2^5 - 1 = 31 \)); the undilated stack needs \( n = 15 \). Same kernels, same per-layer weights; four layers against fifteen.</p>
+<p>The saving against a single wide kernel is even starker. A lone kernel covering a \( 511\times511 \) field would hold \( 511^2 = 261{,}121 \) weights per channel pair; the dilated stack that reaches the same field (\( n = 8 \), since \( 2^9 - 1 = 511 \)) holds \( 8 \times 9 = 72 \). The ratio is about 3,600 to one. Exponential context, linear parameters &mdash; the entire case for dilation in one comparison.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 4.4</span>
+<p>Using \( 3\times3 \) kernels with dilations \( 1, 2, 4, \dots \), find the smallest number of layers whose receptive field reaches at least \( 1000 \). Then give the ratio of a single equivalent kernel's weights to the stack's.</p>
+<details><summary>Show answer</summary>
+<p>\( 2^{n+1} - 1 \ge 1000 \Rightarrow 2^{n+1} \ge 1001 \Rightarrow n+1 \ge 10 \Rightarrow n = 9 \), giving a field of \( 1023 \). Single-kernel weights \( 1023^2 = 1{,}046{,}529 \); stack \( 9 \times 9 = 81 \); ratio \( \approx 12{,}900 \) to one.</p>
+</details>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T5</span>
+<p>Dilation is often misremembered as reducing resolution, like pooling. It does the opposite: it widens the receptive field <em>without</em> downsampling, which is exactly why it suits dense, pixel-level prediction where pooling would throw away the detail you are trying to recover. And the factorization of one \( 5\times5 \) into two \( 3\times3 \) layers is often said to &ldquo;save computation at the cost of expressiveness&rdquo; &mdash; also backwards. The stack is both cheaper and applies an extra nonlinearity; the expressiveness goes <em>up</em>.</p>
+</div>
+
+<h2>4.4 What the chapter bought</h2>
+<p>Convolution arithmetic is the ruler we will measure every later architecture with; keep the floor, the bias, and the multiply&ndash;accumulate count automatic. The residual connection turned out to be three ideas: a gradient floor guaranteed by an indestructible identity term, an ensemble of predominantly shallow paths that makes great depth trainable, and a \( \sqrt{L} \) signal drift that dictates where normalization goes. Dilation buys exponential reach for linear cost. Together these are how architecture began to do the optimizer's work &mdash; shaping the loss surface, and the flow of gradients across it, so that depth became an asset rather than an obstacle. Chapter 5 turns from space to time, and asks the same question about sequences: what makes a recurrent network trainable, and what pins its memory in place?</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A forget gate sits at \( f = 0.9 \). Over how many steps does a gradient fall to 1% of its value?</li>
-<li>What forget-gate bias yields \( f = 0.99 \) at initialization?</li>
-<li>A recurrent layer has input width 800 and hidden width 400. Count its parameters.</li>
-<li>An error law improves \( 50\% \) relative per tenfold data. Give its exponent \( \beta \).</li>
+<li>A \( 224\times224 \) input meets a \( 7\times7 \) kernel, stride 2, padding 3. Give the output side.</li>
+<li>A convolution maps 64 channels to 128 with \( 3\times3 \) kernels and biases. Count its parameters.</li>
+<li>For \( L = 20 \) residual blocks, how many distinct forward paths exist, and what is the mean path length?</li>
+<li>A dilated \( 3\times3 \) stack uses dilations \( 1,2,4,8 \). Give its receptive field.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Two places to put noise.</strong> A network runs 200 time steps and is 3 layers deep. Compare the expected number of times a single piece of information is perturbed under (a) dropout on the recurrent path with keep-probability 0.9, and (b) dropout only on the vertical connections with the same keep-probability. Give the surviving fraction in case (a) and the perturbation count in case (b), and state which design preserves memory.</li>
-<li><strong>Designing a horizon.</strong> You want a cell whose default memory (to the 1% level) reaches about 500 steps. Find the required forget-gate value and the bias that produces it.</li>
-<li><strong>Anatomy of a model.</strong> A model has an embedding of width 1024 over a 30,000-word vocabulary, three recurrent layers of hidden width 1024, and an untied output projection with bias. Give the total parameter count and the fraction that is embedding-plus-projection. Comment on why that fraction matters for scaling studies.</li>
-</ol>
+<li><strong>The path ensemble at 100 blocks.</strong> For \( L = 100 \) residual blocks with each block traversed at probability \( \tfrac12 \), estimate the fraction of paths whose length lies between 40 and 60 inclusive, using the normal approximation with continuity correction.</li>
+<li><strong>Where the saving lives.</strong> Derive the general bottleneck-to-plain MAC ratio as a function of the compression factor \( c \), taking the plain design as two \( 3\times3 \) convolutions at \( C \) channels and the bottleneck as \( 1\times1 \) down, \( 3\times3 \) narrow, \( 1\times1 \) up. Evaluate at \( c = 2 \) and \( c = 4 \), and say what happens as \( c \) grows large.</li>
+<li><strong>Reach versus depth.</strong> You must cover a \( 255\times255 \) receptive field with \( 3\times3 \) kernels. Give the number of dilated layers required, the number of undilated layers required, and the ratio of a single equivalent kernel's weights to the dilated stack's.</li>
+
+<li><strong>Drift, and where normalization goes.</strong> A 60-block residual stack adds, at one output coordinate, an independent zero-mean perturbation of variance \( 0.02 \) per block. Give the accumulated standard deviation. Then suppose normalization is placed on the <em>skip</em> path instead of inside the branch, rescaling the running signal by \( 1/\sqrt{\ell} \) after block \( \ell \). Using Derivation 4.1, say what that does to the surviving identity term, and why the drift argument does not justify it.</li>
+<li><strong>The cost of one design decision.</strong> A layer must map 256 channels to 256 over a \( 7\times7 \) receptive field at one spatial position. Cost it three ways: a single \( 7\times7 \) convolution; three stacked \( 3\times3 \) convolutions; and a bottleneck at \( c = 4 \) wrapping a single \( 3\times3 \). Give parameters and multiply&ndash;accumulates for each, rank them, and say what each buys besides its number.</li></ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>The carousel as a limit.</strong> Show that the constant-error carousel &mdash; unbounded memory &mdash; is the \( f \to 1 \) limit of Derivation 4.1, and explain why a real gated cell cannot simply fix \( f = 1 \) permanently. (Hint: think about what a network that can never forget would do on a task requiring it to discard stale information, and connect this to why \( f \) is made input-dependent rather than a constant.)</li>
+<li><strong>Why identity mappings help twice.</strong> The &ldquo;pre-activation&rdquo; residual block moves normalization and nonlinearity <em>before</em> the convolutions, so the skip path is a clean, unmodified identity. Argue, using Derivation 4.1, why keeping the skip path free of any transformation strengthens the gradient-floor guarantee; then, using Worked Example 4.2, argue why it also helps control the \( \sqrt{L} \) drift. What single principle unifies the two arguments?</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 4 &middot; Pass before Chapter 5</span>
-<p>Reproduce Derivations 4.1 (the horizon), 4.2 (the bias inversion), and 4.3 (the compounding contrast) on blank paper. Attempt B-1 and B-2 closed book. You pass when the horizon logarithm and the per-step-versus-per-layer distinction are both automatic &mdash; the second is the one students most often get wrong under time pressure.</p>
+<p>Reproduce Derivations 3.1 (the identity term) and 3.2 (the path-length binomial) on blank paper, and trace one full convolution-and-pool dimension chain in under three minutes. Attempt B-1 and B-2 closed book. You pass when the three derivations come without hesitation and the arithmetic carries its biases and floors intact.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 4</h4>
 <ul>
-<li><a href="https://colah.github.io/posts/2015-08-Understanding-LSTMs/">Olah, <em>Understanding LSTM Networks</em> (2015)</a><span class="how">Read twice. Derivation 4.1 is its arithmetic shadow; the gate diagrams make the constant-error carousel visual.</span></li>
-<li><a href="https://karpathy.github.io/2015/05/21/rnn-effectiveness/">Karpathy, <em>The Unreasonable Effectiveness of Recurrent Neural Networks</em> (2015)</a><span class="how">Read for pleasure, then for syllabus; the character-level examples show what a working memory horizon buys.</span></li>
-<li><a href="https://arxiv.org/abs/1409.2329">Zaremba, Sutskever &amp; Vinyals, <em>Recurrent Neural Network Regularization</em> (2014)</a><span class="how">Six pages. Find Derivation 4.3 &mdash; the argument for dropping only the non-recurrent connections &mdash; in their setup.</span></li>
-<li><a href="https://arxiv.org/abs/1512.02595">Amodei et al., <em>Deep Speech 2</em> (2015)</a><span class="how">Skim the data-scaling results and check them against Worked Example 4.2's power-law reasoning.</span></li>
-<li><a href="https://www.bioinf.jku.at/publications/older/2604.pdf">Hochreiter &amp; Schmidhuber, <em>Long Short-Term Memory</em> (1997)</a><span class="how">The original. Read the introduction's account of vanishing gradients as the problem Derivation 4.1 quantifies.</span></li>
+<li><a href="https://arxiv.org/abs/1512.03385">He, Zhang, Ren &amp; Sun, <em>Deep Residual Learning for Image Recognition</em> (2015)</a><span class="how">The degradation figure in the opening &mdash; a 56-layer plain network worse than a 20-layer one on <em>training</em> error &mdash; is the vanishing gradient Derivation 4.1 cures. Read their ablation tables as experiments about that derivation.</span></li>
+<li><a href="https://arxiv.org/abs/1603.05027">He et al., <em>Identity Mappings in Deep Residual Networks</em> (2016)</a><span class="how">The shortcut-variant table is the C-challenge argued in full: every way of putting something on the skip path, and what each costs. Compare their reasoning to yours before reading their conclusion.</span></li>
+<li><a href="https://arxiv.org/abs/1605.06431">Veit, Wilber &amp; Belongie, <em>Residual Networks Behave Like Ensembles of Relatively Shallow Networks</em> (2016)</a><span class="how">Derivation 4.2, measured. Go to the lesion-study figure, where blocks are deleted at test time and the ensemble degrades gracefully; that graceful curve is the path-length binomial you derived.</span></li>
+<li><a href="https://arxiv.org/abs/1511.07122">Yu &amp; Koltun, <em>Multi-Scale Context Aggregation by Dilated Convolutions</em> (2015)</a><span class="how">The origin of Derivation 4.3. The context-module table lists the dilation schedule term by term; check that its receptive fields match your \( 2^{n+1}-1 \).</span></li>
+<li><a href="https://cs231n.github.io/convolutional-networks/">Stanford CS231n &mdash; Convolutional Networks</a><span class="how">The standing reference for the arithmetic of Section 4.1; work its worked examples against yours.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 4 &middot; Memory and Gates</span>
-  <span><a href="chapter-05.html">Next: Attention &rarr;</a></span>
+  <span>Chapter 4 &middot; The Architecture of Depth</span>
+  <span><a href="chapter-05.html">Next: Memory and Gates &rarr;</a></span>
 </footer>
 
 </div>

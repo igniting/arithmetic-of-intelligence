@@ -4,10 +4,11 @@
 #   make pdf       build dist/The-Arithmetic-of-Intelligence.pdf
 #   make figure    regenerate the cover figure from its equations
 #   make audit     run the source consistency checks
+#   make numbers   recompute the derived figures and check the source agrees
 #   make serve     preview the web edition at http://localhost:8000
 #   make clean     remove build artefacts
 
-.PHONY: all install figure prerender assemble pdf audit serve clean distclean
+.PHONY: all install figure prerender assemble pdf audit numbers check serve clean distclean
 .DEFAULT_GOAL := pdf
 
 PY ?= python3
@@ -15,7 +16,7 @@ NODE ?= node
 VENV := .venv
 VPYTHON := $(VENV)/bin/python
 
-all: audit pdf
+all: check pdf
 
 $(VENV):
 	$(PY) -m venv $(VENV)
@@ -38,6 +39,11 @@ pdf: assemble $(VENV)
 
 audit: $(VENV)
 	$(VPYTHON) tools/audit.py
+
+numbers: $(VENV)
+	$(VPYTHON) tools/numbers.py
+
+check: audit numbers
 
 serve:
 	@echo "web edition -> http://localhost:8000"

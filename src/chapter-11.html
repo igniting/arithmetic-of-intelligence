@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 11 · Bytes over FLOPs — The Arithmetic of Intelligence</title>
+<title>Chapter 11 · The Price of a Token — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,136 +24,133 @@
 
 <header class="opener">
   <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 11</span>
-  <h1 class="ch">Bytes over FLOPs</h1>
-  <p class="ch-blurb">Two of the era's most elegant results trade arithmetic for memory traffic, and speed for nothing at all. Both are exact: neither changes a single output.</p>
+  <h1 class="ch">The Price of a Token</h1>
+  <p class="ch-blurb">Training cost was a count of operations. Serving cost is something else entirely: generating one token requires reading every weight in the model, which makes decoding a memory problem wearing a compute costume.</p>
 </header>
 
-<p class="lead">Consider two claims that sound like they cannot both be true. The fastest known way to compute attention does <em>more</em> arithmetic than the obvious way. And there is a method that makes a large model generate text two or three times faster while provably producing exactly the same distribution of outputs it would have produced anyway. Both are true, and both follow from the previous chapter's finding about what is actually scarce.</p>
-
-<h2>11.1 Attention without the score matrix</h2>
-<p>Chapter 5 counted attention's arithmetic as \( 2n^2 d \). At realistic sequence lengths, however, the binding cost is not those operations but the \( n \times n \) matrix of scores travelling to and from main memory. The output of attention is only \( n \times d \) values; the intermediate is \( n^2 \). That gap &mdash; \( \Theta(n^2) \) traffic for a \( \Theta(nd) \) result &mdash; is what an IO-aware kernel closes.</p>
+<p class="lead">Ask what limits how fast a large model can write text, and the natural answer is arithmetic: it must do a great many multiplications per word. The natural answer is wrong by a factor of about a hundred and fifty. Generating a single token requires reading every weight in the model out of memory, and it is that reading, not the arithmetic, that sets the pace.</p>
+<p>The reason is that serving splits into two regimes that behave nothing alike. <strong>Prefill</strong> handles the whole prompt at once: large matrices meet large matrices, and the arithmetic units are genuinely the constraint. <strong>Decode</strong> emits one token at a time, so a matrix meets a single vector, and the entire parameter store must stream out of memory to support a comparatively tiny amount of useful multiplication. That second regime is memory-bound, and nearly every serving optimization of recent years is a response to it.</p>
 
 <div class="box worked">
-<span class="label">Worked Example 11.1</span>
-<p class="title">The intermediate does not fit</p>
-<p>At \( n = 4096 \) in half precision, one head's score matrix occupies \( 2n^2 = 2 \times 4096^2 = 33.6 \) MB &mdash; larger than the reference accelerator's entire 20 MB of fast on-chip memory, and that is per head, per layer. You cannot keep it on chip; you either round-trip it through main memory at great cost, or you never form it at all.</p>
+<span class="label">Reference hardware</span>
+<p class="title">The accelerator we will cost everything against</p>
+<p>Throughout Part III, take a reference accelerator with <span class="keynum">312 TFLOP/s</span> of half-precision compute, <span class="keynum">2 TB/s</span> of memory bandwidth, and about 20 MB of fast on-chip memory. Half precision means 2 bytes per value. These are given constants, like a beam's Young's modulus &mdash; you never memorize them, you are handed them and you compute.</p>
 </div>
 
-<p>Never forming it requires computing a softmax over values you see only a block at a time. That is possible, and exactly, because the softmax normalizer can be maintained incrementally.</p>
+<h2>11.1 The key&ndash;value cache</h2>
+<p>Attention at position \( t \) compares the current query against the keys of all previous positions and mixes their values. Recomputing those keys and values at every step would be quadratic waste, so they are stored &mdash; the <em>KV cache</em>. Its size is pure bookkeeping, and it is the first thing to compute about any serving setup.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 11.1</span>
-<p class="title">Streaming softmax</p>
-<p>To normalize safely we subtract the running maximum before exponentiating, so nothing overflows. Maintain a running maximum \( m \) and a running sum \( \ell = \sum e^{s_i - m} \) over the scores seen so far. On receiving a new block of scores \( \{s_i\} \):</p>
-\[ m' = \max\bigl(m,\ \max_i s_i\bigr), \qquad \ell' = \ell\,e^{\,m - m'} + \sum_i e^{\,s_i - m'}. \]
-<p>The factor \( e^{m-m'} \) rescales the old partial sum into the new frame &mdash; it is never larger than 1, so the update is numerically safe. The same rescaling is applied to a running weighted sum of value vectors, so the attention output can be accumulated block by block without the score matrix ever existing in full.</p>
-<p><em>Verify that this is exact.</em> Let scores arrive as \( \{2, 1\} \) then \( \{3, 0\} \). After the first block, \( m = 2 \) and \( \ell = e^0 + e^{-1} = 1.368 \). After the second, \( m' = 3 \) and \( \ell' = 1.368\,e^{-1} + (e^0 + e^{-3}) = 0.503 + 1.050 = 1.553 \). Computing in one shot instead: \( e^{-1} + e^{-2} + e^{0} + e^{-3} = 0.368 + 0.135 + 1 + 0.050 = \) <span class="keynum">1.553</span>. Identical. The streaming form is not an approximation.</p>
+<p class="title">The size of the cache</p>
+<p>Per layer, per attention head that owns its own keys and values, and per sequence position, we store one key vector and one value vector, each of dimension \( d_{\text{head}} \). Hence for \( L \) layers, \( H_{kv} \) key/value heads, sequence length \( s \), batch \( B \), and \( \beta \) bytes per value:</p>
+\[ \text{cache bytes} = 2 \cdot L \cdot H_{kv} \cdot d_{\text{head}} \cdot s \cdot B \cdot \beta. \]
+<p>The leading 2 counts keys and values separately &mdash; the single most commonly dropped factor in this calculation. Note that the cache is <em>linear in sequence length</em>: it is a per-token cost that accumulates, not a fixed overhead.</p>
 </div>
 
-<p>With this, attention is computed in tiles small enough to sit in fast memory: load a block of queries, stream blocks of keys and values past it, accumulate. Main-memory traffic falls by roughly an order of magnitude. The backward pass <em>recomputes</em> the blocks it needs rather than storing them &mdash; more arithmetic, less memory &mdash; and the kernel wins anyway. That is the roofline lesson in its purest form.</p>
-
-<div class="box trap">
-<span class="label">Trap &middot; T8 &middot; objective versus estimator</span>
-<p>This technique is <em>exact</em>. It computes the same attention function, to floating-point tolerance, as the naive implementation. Approximate attention &mdash; sparse patterns, low-rank surrogates &mdash; is a different trade entirely, buying speed with fidelity. Confusing the two is the most common misreading here: an IO-aware kernel changes <em>how</em> a quantity is computed, not <em>what</em> is computed.</p>
+<div class="box worked">
+<span class="label">Worked Example 11.1</span>
+<p class="title">A cache that outgrows the model</p>
+<p>Take a 7-billion-parameter model with \( L = 32 \) layers, 32 heads of dimension 128, half precision, at context \( s = 4096 \), batch 1.</p>
+<p>Work the per-token figure first, since that is the quantity that accumulates. Per position the cache holds \( 2 \times 32 \times 32 \times 128 \times 2 = 524{,}288 \) bytes &mdash; about <span class="keynum">0.5 MB per token</span>. Over the full context: \( 524{,}288 \times 4096 = \) <span class="keynum">2.15 GB</span>.</p>
+<p>The weights themselves are \( 7\times10^9 \times 2 = 14 \) GB. At batch 1 the cache is modest &mdash; but at batch 8 it becomes 17 GB and <em>exceeds the weights</em>. This, not arithmetic, is why long-context serving is expensive.</p>
+<p>Now suppose the model shares keys and values across groups of heads, so that \( H_{kv} = 8 \) rather than 32. The cache falls by a factor of four, to <span class="keynum">0.54 GB</span> &mdash; the entire motivation for grouped-query attention.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 11.1</span>
-<p>Scores arrive as \( \{1, 4\} \) then \( \{2, 2, 5\} \). Run the streaming update and verify against the one-shot sum.</p>
-<details><summary>Show answer</summary>
-<p>Block 1: \( m = 4 \), \( \ell = e^{-3} + e^{0} = 1.050 \). Block 2: \( m' = 5 \), \( \ell' = 1.050\,e^{-1} + (e^{-3} + e^{-3} + e^{0}) = 0.386 + 1.100 = 1.486 \). One shot: \( e^{-4} + e^{-1} + e^{-3} + e^{-3} + e^{0} = 0.018 + 0.368 + 0.050 + 0.050 + 1 = 1.486 \). ✓</p>
+<p>A 70B model has \( L = 80 \) layers, \( H_{kv} = 8 \), \( d_{\text{head}} = 128 \), half precision. (a) Give the cache bytes per token. (b) At batch 4, what context length fills 40 GB?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 2 \times 80 \times 8 \times 128 \times 2 = 327{,}680 \) bytes, about 0.33 MB per token. (b) \( 40\times10^9 / (4 \times 3.28\times10^5) \approx 30{,}500 \) tokens.</p>
 </details>
 </div>
 
-<h2>11.2 Speculative decoding</h2>
-<p>The second technique attacks the same waste from a different side. Decoding is memory-bound (Chapter 10), so the accelerator's arithmetic sits idle while weights stream past. Suppose a small, cheap <em>draft</em> model proposes the next \( k \) tokens; the large <em>target</em> model can then check all \( k \) in a <em>single</em> forward pass, because verifying several positions at once is a prefill-shaped, compute-bound operation &mdash; nearly free relative to \( k \) separate decode steps.</p>
-<p>The obvious objection is that the output would then be the draft's, not the target's. The answer is a rejection-sampling scheme that makes the final distribution <em>exactly</em> the target's.</p>
+<h2>11.2 The roofline: which resource is binding</h2>
+<p>Whether a computation is limited by arithmetic or by memory is settled by comparing two ratios. The <em>arithmetic intensity</em> of a computation is the number of operations it performs per byte it moves. The <em>ridge point</em> of a machine is its peak operation rate divided by its bandwidth. Below the ridge, you are memory-bound; above it, compute-bound.</p>
 
-<p>The obvious objection comes first, and you should feel its force before seeing it dissolved. If a small, weaker model is proposing the words, surely the output is contaminated by that weaker model &mdash; faster, perhaps, but subtly worse. It is an entirely reasonable worry. It is also, as the following shows, exactly wrong: the acceptance rule is constructed so that the weaker model's preferences cancel out of the final distribution completely.</p>
+<p>Try predicting the number first. On a machine that can do three hundred trillion operations per second, what fraction of that capacity do you suppose a large model uses while writing text one word at a time? Most people guess something like half, or a quarter if they are being pessimistic. The real figure is below one percent, and seeing exactly why will change how you read every performance claim in this field.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 11.2</span>
-<p class="title">Exactness by rejection sampling</p>
-<p>Let the target assign probability \( p(x) \) to token \( x \) and the draft assign \( q(x) \). Sample \( x \sim q \) and accept it with probability \( \min\bigl(1, p(x)/q(x)\bigr) \). If rejected, sample instead from the normalized residual \( \operatorname{norm}\bigl(\max(0,\ p - q)\bigr) \).</p>
-<p>Then the probability of emitting \( x \) is the accepted mass plus the resampled mass. The accepted mass is \( q(x)\min(1, p/q) = \min(q(x), p(x)) \). Summed over all tokens, the total accepted probability is \( \sum_x \min(p,q) \), so rejection occurs with probability \( 1 - \sum_x \min(p,q) = \sum_x \max(0, p-q) \). The residual distribution places mass \( \max(0, p(x)-q(x)) / \sum_x \max(0,p-q) \) on \( x \). Multiplying and adding:</p>
-\[ \min(p,q) + \max(0, p-q) = p(x). \]
-<p>The emitted distribution is exactly the target's. Speculation changes speed, never samples.</p>
-</div>
-
-<p>How much speed? If each drafted token is accepted independently with rate \( \alpha \), a verification cycle keeps the accepted run plus one token the target supplies regardless.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 11.3</span>
-<p class="title">Expected tokens per cycle</p>
-<p>The run of accepted tokens has length \( i \) with probability \( \alpha^i(1-\alpha) \) for \( i < k \), and length \( k \) with probability \( \alpha^k \); each case yields \( i+1 \) tokens. Summing the truncated geometric series,</p>
-\[ \mathbb{E}[\text{tokens per cycle}] = \frac{1 - \alpha^{\,k+1}}{1 - \alpha}. \]
-<p>If the draft costs \( c \) target-forwards per token, a cycle costs \( kc + 1 \) target-forwards. The speedup is the ratio.</p>
+<p class="title">Why decode sits far below the ridge</p>
+<p>Our reference machine has ridge point \( 312\times10^{12} / 2\times10^{12} = \) <span class="keynum">156</span> operations per byte.</p>
+<p>A large square matrix multiply performs \( n^3 \) operations while moving about \( 3n^2 \) values, an intensity of roughly \( n/3 \) &mdash; for large \( n \) this sits comfortably above the ridge, so prefill is compute-bound.</p>
+<p>Batch-1 decode is the opposite. Producing one token performs about \( 2N \) operations (one multiply&ndash;add per parameter) while moving about \( 2N \) bytes (reading every parameter once in half precision). The intensity is about <strong>1 operation per byte</strong> &mdash; a factor of 156 below the ridge. Decoding uses well under one percent of the machine's arithmetic capability.</p>
+<p>Batching \( B \) requests reuses each weight read \( B \) times, so the intensity rises to roughly \( B \). You approach compute-bound only near \( B \approx 156 \) &mdash; which is precisely why serving systems are obsessed with batch size.</p>
 </div>
 
 <div class="box worked">
 <span class="label">Worked Example 11.2</span>
-<p class="title">The economics, end to end</p>
-<p>Take \( \alpha = 0.8 \), \( k = 4 \), \( c = 0.1 \). Tokens per cycle: \( (1 - 0.8^5)/0.2 = (1-0.328)/0.2 = 3.36 \). Cycle cost: \( 4(0.1) + 1 = 1.4 \) target-forwards. Speedup: \( 3.36/1.4 = \) <span class="keynum">2.4&times;</span> &mdash; with provably identical output.</p>
-<p>Sensitivity matters more than the headline. At \( \alpha = 0.5 \) the same configuration gives \( (1 - 0.5^5)/0.5 = 1.94 \) tokens per 1.4 forwards, a mere \( 1.38\times \). The draft's <em>agreement</em> with the target is everything; its standalone quality matters only through \( \alpha \).</p>
+<p class="title">The decode speed limit</p>
+<p>A 7B model in half precision holds 14 GB of weights, all of which must be read to emit one token. The ceiling is therefore</p>
+\[ \frac{2\text{ TB/s}}{14\text{ GB}} = \frac{2\times10^{12}}{1.4\times10^{10}} \approx \textbf{143 tokens per second}, \]
+<p>no matter how fast the arithmetic units are. Doubling the machine's FLOP rate changes nothing; halving the bytes per weight doubles the ceiling. This single division reframes what &ldquo;a faster model&rdquo; means.</p>
 </div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T7 &middot; rate versus stock, and T9 &middot; name your budget</span>
+<p>Two errors to guard against. First, cache figures are often quoted per token and often quoted as totals, and the two differ by a factor of the context length; always state which you mean. Second &mdash; and this is a habit for all of Part III &mdash; every efficiency claim must name the budget it improves. Grouped-query attention shrinks the <em>cache</em>, not the weight read, so it helps long-context and large-batch serving but does <em>not</em> raise the batch-1 decode ceiling. &ldquo;It makes it faster&rdquo; without naming a budget is not an answer.</p>
+</div>
+
+<h2>11.3 Utilization, honestly measured</h2>
+<p>A final piece of accounting: what fraction of a machine's capability is a workload actually using? For training, the model FLOP utilization is the useful operations per second divided by peak &mdash; with \( 6N \) operations per token from Chapter 7,</p>
+\[ \text{MFU} = \frac{\text{tokens/s} \times 6N}{\text{peak FLOP/s}}. \]
+<p>A well-tuned training run reaches a substantial fraction. Decode, as Derivation 11.2 showed, cannot: its utilization is structurally terrible, because it is not limited by the resource the denominator measures. Reporting decode MFU without saying so is a way of making a memory-bound workload look like an engineering failure rather than a physical one.</p>
 
 <div class="drill">
 <span class="label">Drill 11.2</span>
-<p>(a) The draft assigns \( q(A) = 0.5 \), the target \( p(A) = 0.3 \). What is the acceptance probability for A? (b) With \( \alpha = 0.7, k = 3, c = 0.15 \), what is the speedup?</p>
-<details><summary>Show answers</summary>
-<p>(a) \( \min(1, 0.3/0.5) = 0.6 \). (b) Tokens \( = (1 - 0.7^4)/0.3 = (1-0.2401)/0.3 = 2.53 \); cost \( = 3(0.15)+1 = 1.45 \); speedup \( = 1.75\times \).</p>
+<p>A training run sustains 4200 tokens/s per accelerator on a 7B model. What is its MFU on the reference machine?</p>
+<details><summary>Show answer</summary>
+<p>\( 4200 \times 6 \times 7\times10^9 = 1.76\times10^{14} \) FLOP/s \( = 176 \) TFLOP/s. Divided by 312: <strong>56%</strong>.</p>
 </details>
 </div>
 
-<p>Choosing \( k \) is a marginal calculation: extending the draft by one more token adds an expected \( \alpha^{k+1} \) tokens and costs \( c \) more. When those balance, you are at the optimum &mdash; and because the curve is flat near it, a range of \( k \) performs about equally.</p>
-
-<h2>11.3 What the chapter bought</h2>
-<p>Both techniques in this chapter trade an abundant resource for a scarce one, and both are exact &mdash; a combination worth pausing on, since it is rarer than it sounds. Streaming softmax lets attention be computed in tiles, cutting memory traffic by an order of magnitude while doing slightly more arithmetic and recomputation. Speculative decoding converts \( k \) memory-bound passes into one compute-bound verification, with a rejection rule that provably preserves the target distribution. Both illustrate the discipline this book keeps returning to: identify the binding budget, then spend freely from the other. Chapter 12 continues in the same vein but changes the object &mdash; instead of computing the same model more cleverly, it makes the model itself sparser and cheaper.</p>
+<h2>11.4 What the chapter bought</h2>
+<p>You can now price a deployed model with three formulas, and none of them counts a floating-point operation. The cache size, linear in context and often larger than the weights. The roofline, which places batch-1 decode a hundred and fifty times below the point where arithmetic matters. And the decode ceiling, bandwidth divided by weight bytes, which says what a model can possibly emit per second. Together they explain why the modern era's optimizations target bytes rather than operations &mdash; and Chapter 12 takes up the two most elegant examples: an attention kernel that does more arithmetic to move less memory, and a decoding scheme that buys parallelism from a cheap draft model while provably changing nothing about the output.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>At \( n = 8192 \), half precision: give one head's score-matrix size and its ratio to 20 MB of on-chip memory.</li>
-<li>Run the streaming softmax on blocks \( \{0, 2\} \) then \( \{1\} \), and verify against the one-shot sum.</li>
-<li>With \( \alpha = 0.9, k = 5 \), give the expected tokens per cycle.</li>
-<li>State, in one sentence each, what streaming softmax and speculative decoding change and what they leave exactly unchanged.</li>
+<li>A model has \( L = 48 \), \( H_{kv} = 16 \), \( d_{\text{head}} = 128 \), half precision. Give the cache bytes per token.</li>
+<li>Give the ridge point of a machine with 500 TFLOP/s and 3 TB/s.</li>
+<li>A 13B model in half precision: give the batch-1 decode ceiling on the reference machine.</li>
+<li>The same 13B model quantized to 4 bits per weight: give the new ceiling.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Traffic accounting.</strong> For standard attention at \( n = 4096 \), \( d = 128 \), half precision, compare the score-matrix traffic (written once and read once) against the unavoidable traffic for queries, keys, values, and output. Give the ratio and comment on how it scales with \( n \) and \( d \).</li>
-<li><strong>Proving exactness.</strong> Carry out Derivation 11.2 for a two-symbol alphabet with explicit numbers: \( p = (0.3, 0.7) \), \( q = (0.5, 0.5) \). Compute the acceptance probabilities, the rejection probability, the residual distribution, and verify that the emitted distribution equals \( p \) exactly.</li>
-<li><strong>Choosing the draft length.</strong> With \( \alpha = 0.8 \) and \( c = 0.1 \), compute the speedup at \( k = 2, 4, 8, 16 \). Identify where the optimum lies, and show that the marginal condition \( \alpha^{k+1} \approx c \) predicts it.</li>
+<li><strong>Sizing a deployment.</strong> A 70B model in half precision serves at context 8192, batch 16, with \( L = 80 \), \( H_{kv} = 8 \), \( d_{\text{head}} = 128 \). Give (a) the weight memory, (b) the total KV cache, (c) their sum, and (d) the number of 80 GB accelerators required. State which term you would attack first and why.</li>
+<li><strong>The batching crossover.</strong> Derive the arithmetic intensity of batch-\( B \) decode and show it is approximately \( B \). Find the batch size at which the reference machine becomes compute-bound, and explain what happens to per-request latency as batch size approaches it.</li>
+<li><strong>What quantization actually buys.</strong> For a 70B model, give the decode ceiling at 16, 8, and 4 bits per weight. Then state precisely which budget quantization improves and which it leaves untouched, and use that to explain why quantization speeds up decode but not prefill.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Why decode and not prefill.</strong> Explain, using Chapter 10's arithmetic-intensity argument, why speculative decoding accelerates generation but offers essentially nothing for prompt processing. Then propose what property a workload must have for speculation to help it, stated in terms of intensity and the ridge point, and give one non-language example that would qualify.</li>
+<li><strong>Two eras, two scarcities.</strong> Chapter 7 minimized loss subject to a budget of operations; this chapter argues bytes are what bind at serving time. Construct a scenario in which the compute-optimal model of Chapter 7 is the <em>wrong</em> model to deploy, quantify the disagreement using this chapter's formulas, and state what additional term the objective would need for the two chapters to agree. (You are deriving, in outline, the argument Chapter 17 completes.)</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 11 &middot; Pass before Chapter 12</span>
-<p>Reproduce Derivation 11.1 (streaming softmax, including the value accumulator's rescaling), Derivation 11.2 (the exactness proof), and Derivation 11.3 (expected tokens per cycle) on blank paper. Verify a streaming example numerically by hand. Attempt B-2 and B-3 closed book. You pass when you can state, without hedging, that both techniques are exact and explain why.</p>
+<p>Reproduce Derivations 10.1 (cache size, with the factor of 2 and the right head count) and 10.2 (intensities and the ridge point) on blank paper, and produce the 143-tokens-per-second ceiling from nothing. Attempt B-1 and B-3 closed book. You pass when you instinctively ask &ldquo;which budget?&rdquo; of every optimization claim.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 11</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/1805.02867">Milakov &amp; Gimelshein, <em>Online Normalizer Calculation for Softmax</em> (2018)</a><span class="how">Three pages, read fully. Derivation 11.1 in its original form.</span></li>
-<li><a href="https://arxiv.org/abs/2205.14135">Dao et al., <em>FlashAttention</em> (2022)</a><span class="how">Sections 1&ndash;3 and Figure 1. The IO analysis is Worked Example 11.1 made rigorous.</span></li>
-<li><a href="https://arxiv.org/abs/2307.08691">Dao, <em>FlashAttention-2</em> (2023)</a><span class="how">Skim for what changed &mdash; work partitioning, not mathematics. A good lesson in where real speedups come from.</span></li>
-<li><a href="https://arxiv.org/abs/2211.17192">Leviathan, Kalman &amp; Matias, <em>Fast Inference from Transformers via Speculative Decoding</em> (2023)</a><span class="how">Section 2 contains the one-page proof of Derivation 11.2; compare it to yours.</span></li>
-<li><a href="https://arxiv.org/abs/2302.01318">Chen et al., <em>Accelerating Large Language Model Decoding with Speculative Sampling</em> (2023)</a><span class="how">The parallel discovery; useful for seeing the same result presented differently.</span></li>
+<li><a href="https://kipp.ly/transformer-inference-arithmetic/">Kipply, <em>Transformer Inference Arithmetic</em></a><span class="how">Its KV-cache section and its arithmetic-intensity section are this chapter with different notation. Recompute every number in both yourself; where you disagree, one of you has dropped a factor of 2.</span></li>
+<li><a href="https://arxiv.org/abs/2211.05102">Pope et al., <em>Efficiently Scaling Transformer Inference</em> (2022)</a><span class="how">Sections 2&ndash;3. The systems view of the roofline argument, with real partitioning strategies.</span></li>
+<li><a href="https://arxiv.org/abs/2305.13245">Ainslie et al., <em>GQA: Grouped-Query Attention</em> (2023)</a> and <a href="https://arxiv.org/abs/1911.02150">Shazeer, <em>Fast Transformer Decoding</em> (2019)</a><span class="how">The quality-versus-speed table, for what sharing keys and values across head groups costs in accuracy. Worked Example 11.1 gives the cache saving; this gives the bill.</span></li>
+<li><a href="https://jax-ml.github.io/scaling-book/inference/">Austin et al., <em>How to Scale Your Model</em> &mdash; inference chapter</a><span class="how">Its roofline section, worked alongside Derivation 11.2. The best free treatment of this material, and it uses the same ridge-point argument on different hardware.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 11 &middot; Bytes over FLOPs</span>
-  <span><a href="chapter-12.html">Next: Sparsity and Thrift &rarr;</a></span>
+  <span>Chapter 11 &middot; The Price of a Token</span>
+  <span><a href="chapter-12.html">Next: Bytes over FLOPs &rarr;</a></span>
 </footer>
 
 </div>

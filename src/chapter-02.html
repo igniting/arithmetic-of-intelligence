@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 2 · The Geometry of Training — The Arithmetic of Intelligence</title>
+<title>Chapter 2 · The Objects — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -23,140 +23,170 @@
 <div class="page">
 
 <header class="opener">
-  <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 2</span>
-  <h1 class="ch">The Geometry of Training</h1>
-  <p class="ch-blurb">For two decades the obstacle to deep learning was not representation but optimization. The problem, and its cure, are a story about the shape of a valley.</p>
+  <span class="eyebrow">Part I &middot; Foundations &middot; Chapter 2</span>
+  <h1 class="ch">The Objects</h1>
+  <p class="ch-blurb">Seven things this book computes with, written down exactly once. Not what they are for &mdash; only what they are.</p>
 </header>
 
-<p class="lead">Picture a narrow valley with steep walls. You are standing on one slope, blindfolded, allowed only to feel which way the ground falls and step that way. You will bounce from wall to wall and creep along the floor. That, almost exactly, is what training a deep network looked like for twenty years, and understanding why requires nothing more than the shape of the valley.</p>
-<p>It is tempting to assume the difficulty is one of expressiveness &mdash; that among all possible settings of the weights, the rare good one is hard to find. For a long time the opposite was true. Good settings are plentiful. The trouble was that gradient descent, the only search procedure that scales, could not travel to them. It would take a step, overshoot in one direction, crawl in another, and stall. Naming that temptation is worth a sentence, because believing it sends you hunting for the wrong fix &mdash; more capacity, more regularization &mdash; when the problem was never capacity at all.</p>
+<p class="lead">You cannot derive a result about a thing you have not written down. What follows is the shortest possible statement of every object the rest of this book manipulates: a network, a gradient step, a softmax, a Jacobian product, a token, a divergence, a normalizer.</p>
+<p>This is a reference chapter and it is deliberately flat. There are no surprises in it and nothing here is argued for &mdash; the arguing starts in Chapter 3, and every one of these objects earns its place there. Read it once at normal speed, then use it the way you use a table of integrals: when a symbol in a later chapter stops meaning something, come back, and go away again.</p>
+<p>One warning about what this chapter is not. It does not explain why neural networks work, what problems they solve, or how anyone came to write them down in this form. Those are excellent questions and this is the wrong book for them; the readings at the end are the right ones. The book you are holding assumes you have seen a network before and asks a different question &mdash; what does it cost, and what does the arithmetic force.</p>
 
-<h2>2.1 The loss surface as a bowl</h2>
-<p>Near a minimum, any smooth loss looks like a bowl. Along some directions the walls are steep; along others they are shallow. If we align our coordinates with the natural axes of the bowl, the loss separates into independent one-dimensional pieces, each a simple parabola with its own steepness. A convenient model of a two-dimensional slice is</p>
-\[ L(x, y) = \tfrac{1}{2}\left(\lambda_1 x^2 + \lambda_2 y^2\right), \]
-<p>where \( \lambda_1 \) and \( \lambda_2 \) are the steepnesses &mdash; the curvatures &mdash; along the two axes. If \( \lambda_1 \) is much larger than \( \lambda_2 \), the bowl is a long narrow trough: steep across, shallow along. The number that captures this asymmetry is the ratio of the largest curvature to the smallest,</p>
-\[ \kappa = \frac{\lambda_{\max}}{\lambda_{\min}}, \]
-<p>called the <em>condition number</em>. A well-shaped bowl has \( \kappa \) near 1; a pathological valley has \( \kappa \) in the hundreds or thousands. Everything that follows is a statement about how badly a large \( \kappa \) hurts, and what can be done about it.</p>
-
-<h2>2.2 Why the step size is trapped</h2>
-<p>Gradient descent updates each coordinate by subtracting the step size \( \eta \) times the gradient. For our model surface the gradient along \( x \) is \( \lambda_1 x \), so the update is \( x \leftarrow x - \eta \lambda_1 x = (1 - \eta\lambda_1)x \), and likewise for \( y \). Each coordinate is simply multiplied, every step, by a fixed factor. From Chapter 1's stability reflex we know such an iteration converges exactly when the magnitude of the factor is below one.</p>
-
-<p>Before deriving it, guess. If one direction of the bowl is a hundred times steeper than another, how much does that slow you down &mdash; a little, or a lot? Most people's instinct is that it costs you a constant factor, some fixed tax for an awkward shape. The instinct is wrong, and wrong in an important way: the cost is proportional to the ratio itself, so a hundredfold asymmetry costs you roughly a hundredfold in steps. Here is where that comes from.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 2.1</span>
-<p class="title">The stable range of step sizes</p>
-<p>The coordinate \( x \) obeys \( x \leftarrow (1 - \eta\lambda_1)x \), which converges to zero if and only if \( |1 - \eta\lambda_1| < 1 \), i.e. \( 0 < \eta\lambda_1 < 2 \). The same holds for \( y \) with \( \lambda_2 \). Both must hold at once, and since \( \lambda_1 = \lambda_{\max} \) is the larger curvature, it is the binding one:</p>
-\[ 0 < \eta < \frac{2}{\lambda_{\max}}. \]
-<p>This is the whole trap in one line. The steep direction sets a ceiling on the step size. Any larger step and the iteration diverges along that axis, flinging the weights outward. So the step size is <em>hostage to the steepest curvature in the entire problem</em> &mdash; even though most directions would happily accept a far larger step.</p>
-</div>
-
-<p>Now watch what that ceiling does to the shallow direction. With \( \eta \) pinned just under \( 2/\lambda_{\max} \), the shallow coordinate contracts by a factor \( |1 - \eta\lambda_{\min}| \), which is close to \( 1 - 2\lambda_{\min}/\lambda_{\max} = 1 - 2/\kappa \). When \( \kappa \) is large this factor is barely below one: the shallow direction crawls. The steep direction, meanwhile, is oscillating back and forth across the valley, using up the entire step budget just to stay stable. The network is not stuck because it cannot represent the answer; it is stuck because the geometry forces it to inch down the valley floor while ricocheting between the walls.</p>
-
-<h2>2.3 Counting the cost of curvature</h2>
-<p>We can make the slowness precise. The error along the shallow direction contracts by a fixed factor each step, so reaching a target reduction is a logarithm problem of exactly the kind Chapter 1 drilled. It is a standard result &mdash; we take it as given here, the way a physics problem gives you a formula for terminal velocity &mdash; that gradient descent on such a surface, at the best possible fixed step size, contracts the error each step by</p>
-\[ \rho_{\text{GD}} = \frac{\kappa - 1}{\kappa + 1}, \]
-<p>while the same surface, optimized with a well-tuned <em>momentum</em> term that lets the shallow direction accumulate speed, contracts by</p>
-\[ \rho_{\text{mom}} = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}. \]
-<p>The number of steps to shrink the error by a factor \( F \) is \( t = \ln F / \ln(1/\rho) \). The two rates above look similar, but the square root inside the momentum rate is decisive, as the worked example shows.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 2.1</span>
-<p class="title">Three hundred and forty-five steps, or thirty-four</p>
-<p>Take a valley with \( \kappa = 100 \) &mdash; steep direction a hundred times sharper than the shallow one &mdash; and ask how many steps each method needs to reduce the error a thousandfold.</p>
-<p>For plain gradient descent, \( \rho_{\text{GD}} = 99/101 = 0.9802 \), so \( t = \ln(1000)/\ln(1/0.9802) = 6.908/0.02 = 345 \) steps. For momentum, \( \rho_{\text{mom}} = 9/11 = 0.8182 \), so \( t = 6.908/\ln(1/0.8182) = 6.908/0.2007 = 34 \) steps. The ratio is almost exactly ten &mdash; which is \( \sqrt{\kappa} = \sqrt{100} \).</p>
-<p>This is the quantitative content of the phrase &ldquo;momentum glides along the valley floor.&rdquo; Plain descent pays a cost proportional to \( \kappa \); momentum pays a cost proportional to \( \sqrt{\kappa} \). On a valley conditioned at \( 10^4 \), that is the difference between ten thousand steps and one hundred.</p>
-</div>
+<h2>2.1 A network, a loss, and a step</h2>
+<p>A <strong>layer</strong> takes a vector \( x \) of width \( m \), forms weighted sums of its entries, adds a constant to each, and passes the result through a fixed nonlinear function \( \phi \) applied entrywise:</p>
+\[ y = \phi(Wx + b), \qquad W \in \mathbb{R}^{n \times m},\ b \in \mathbb{R}^{n}. \]
+<p>\( W \) holds the <strong>weights</strong> and \( b \) the <strong>biases</strong>; together they are the layer's <strong>parameters</strong>, and Chapter 1's counting rule says the layer costs about \( nm \) multiply&ndash;accumulates per input. The entries of \( y \) are the layer's <strong>activations</strong>. A <strong>network</strong> stacks such layers, each consuming the previous one's output; running an input through the stack is the <strong>forward pass</strong>. Write \( \theta \) for all the parameters of all the layers collected into one vector, and \( N \) for how many numbers that is &mdash; the quantity Chapter 7 spends its entire budget on.</p>
+<p>The commonest nonlinearity in this book is the <strong>rectifier</strong>, \( \phi(z) = \max(0, z) \): zero for negative input, the identity for positive. It contributes no gradient where it is flat, a fact Chapter 3 turns into a practical warning about biases.</p>
+<p>A <strong>loss</strong> \( L(\theta) \) is a single number measuring how badly the network does on data, and <strong>training</strong> means making it smaller by changing \( \theta \). The only search procedure that scales is <strong>gradient descent</strong>: compute the gradient \( g = \nabla_\theta L \), which points in the direction of steepest increase, and step against it,</p>
+\[ \theta \leftarrow \theta - \eta\, g, \]
+<p>where the <strong>step size</strong> \( \eta \) (also called the learning rate) is a small positive number. Chapter 3 is about how badly this can go.</p>
+<p><strong>Momentum</strong> is one modification, and because Chapter 3 derives a result about it that you will be asked to reproduce three times, it is worth having the update itself in front of you. Keep a running average \( v \) of recent gradients and step along that instead:</p>
+\[ v \leftarrow \beta v + g, \qquad \theta \leftarrow \theta - \eta\, v, \]
+<p>with \( \beta \) between 0 and 1 &mdash; typically 0.9. Where successive gradients agree, \( v \) accumulates and the effective step grows; where they alternate in sign, they cancel. That is the whole mechanism, and Chapter 3 prices it.</p>
 
 <div class="drill">
 <span class="label">Drill 2.1</span>
-<p>A valley has \( \kappa = 400 \). Estimate the ratio of plain-gradient-descent steps to momentum steps for the same error reduction, without computing either count in full.</p>
-<details><summary>Show answer</summary>
-<p>The ratio of step counts is \( \ln(1/\rho_{\text{GD}}) \) versus \( \ln(1/\rho_{\text{mom}}) \) inverted, which for large \( \kappa \) tends to \( \sqrt{\kappa} \). Here \( \sqrt{400} = 20 \). (Explicitly: \( \rho_{\text{GD}} = 399/401 \Rightarrow \ln(1/\rho) = 0.005 \); \( \rho_{\text{mom}} = 19/21 \Rightarrow \ln(1/\rho) = 0.100 \); ratio \( 0.100/0.005 = 20 \).)</p>
+<p>(a) A layer maps width 1024 to width 4096 with biases. How many parameters, and how many multiply&ndash;accumulates per input? &nbsp; (b) In the momentum update with \( \beta = 0.9 \), a constant gradient \( g \) is supplied at every step. What value does \( v \) approach?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 4096 \times 1024 + 4096 = 4{,}198{,}400 \) parameters; about \( 4.19 \) million multiply&ndash;accumulates, one per weight. &nbsp; (b) \( v \to g(1 + \beta + \beta^2 + \cdots) = g/(1-\beta) = 10g \) &mdash; Chapter 1's geometric series, and the reason momentum takes effectively larger steps along a consistent direction.</p>
 </details>
 </div>
 
-<div class="box trap">
-<span class="label">Trap &middot; T1</span>
-<p>The deeper failure this chapter describes is a <em>training</em> failure, not overfitting. When a plain deep network does worse than a shallow one, the instinct is to suspect it has memorized and failed to generalize. But the error that rises is the training error itself: the optimizer never reached a good setting at all. Confusing an optimization failure with a generalization failure sends you reaching for the wrong remedy &mdash; regularization instead of better conditioning &mdash; and it is one of the most common misreadings of the early deep-learning literature.</p>
-</div>
-
-<h2>2.4 Starting in the right place: the statistics of initialization</h2>
-<p>Conditioning governs how the optimizer moves once it starts; initialization governs whether it can start at all. Two separate requirements fall directly out of Chapter 1's variance algebra, and both were, historically, hard-won.</p>
-<p>The first is scale. Recall the fan-in derivation: a unit summing \( m \) unit-variance inputs with weights of variance \( \sigma^2 \) produces an output of variance \( m\sigma^2 \). If \( \sigma^2 \) is chosen carelessly, signal either explodes or vanishes as it crosses each layer, and a deep stack multiplies that error many times over. Preserving the scale of activations from layer to layer requires</p>
-\[ \sigma^2 = \frac{1}{m}, \]
-<p>the principle behind every sensible initialization scheme. The precise constant is adjusted for the nonlinearity in use, but the \( 1/m \) skeleton is always there.</p>
+<h2>2.2 Logits, softmax, and cross-entropy</h2>
+<p>When a network must choose among \( V \) options it emits a vector of \( V \) real numbers called <strong>logits</strong>, written \( z \). Logits are unconstrained: any real values, positive or negative. The <strong>softmax</strong> converts them into a probability distribution by exponentiating and normalizing:</p>
+\[ \operatorname{softmax}(z)_i = \frac{e^{z_i}}{\sum_{j=1}^{V} e^{z_j}}. \]
+<p>Three properties are used constantly and none is deep. The outputs are positive and sum to one, so this is a distribution. Adding the same constant to every logit changes nothing, because the constant factors out of numerator and denominator alike &mdash; softmax sees only differences, which is why Chapter 12's streaming version may subtract a running maximum without approximation. And when one logit exceeds the others by much more than 1, its probability approaches 1 and the rest collapse toward zero; the distribution <strong>saturates</strong>, and a saturated softmax has almost no gradient, since moving the logits barely moves the probabilities. Chapter 6 rescales attention scores for exactly this reason.</p>
+<p>With two options the softmax reduces to the <strong>logistic function</strong> of the logit difference,</p>
+\[ \sigma(u) = \frac{1}{1 + e^{-u}}, \]
+<p>which recurs throughout the book as a gate value in Chapter 5 and as a preference probability in Chapter 14. Note \( \sigma(0) = \tfrac12 \), so \( -\ln\sigma(0) = \ln 2 = 0.693 \) &mdash; a number that turns out to be an acceptance test for a piece of code in Chapter 14.</p>
+<p>Given a true outcome \( i \) and a predicted distribution \( q \), the <strong>cross-entropy loss</strong> is \( -\ln q_i \), and its average over a dataset is the loss almost every model in this book minimizes. Chapter 1 already noted that \( -\log_2 q_i \) is the number of bits an optimal code spends on outcome \( i \); the loss is therefore a code length, which is the identity Chapter 10 builds a chapter on. <strong>Perplexity</strong> is the same quantity re-expressed as an effective number of equally likely options, \( 2^{H} \) with \( H \) the cross-entropy in bits.</p>
 
 <div class="box worked">
-<span class="label">Worked Example 2.2</span>
-<p class="title">A too-small initialization</p>
-<p>A layer has fan-in \( m = 4096 \). The variance-preserving choice is \( \sigma^2 = 1/4096 \), i.e. \( \sigma \approx 0.0156 \). Suppose instead someone initializes with a flat \( \sigma = 0.01 \). The output variance is then \( m\sigma^2 = 4096 \times 10^{-4} = 0.41 \). Each layer shrinks the signal to under half its variance; across a dozen layers the activations have all but vanished, and with them the gradients. The network trains glacially or not at all &mdash; not because anything is conceptually wrong, but because a single variance was set a factor of \( 1.5 \) too small and compounded.</p>
+<span class="label">Worked Example 2.1</span>
+<p class="title">One prediction, priced</p>
+<p>A model with a vocabulary of four sees a context and emits logits \( (3.0,\ 1.0,\ 0.5,\ 0.0) \). The token that actually follows is the second. What does that prediction cost, in nats, in bits, and as a perplexity?</p>
+<p>Exponentiate: \( e^{3} = 20.09 \), \( e^{1} = 2.718 \), \( e^{0.5} = 1.649 \), \( e^{0} = 1 \), summing to \( 25.45 \). The distribution is \( (0.789,\ 0.107,\ 0.065,\ 0.039) \). The true token was assigned \( q = 0.107 \), so the loss is \( -\ln 0.107 = 2.237 \) nats, which is \( 2.237/0.693 = 3.23 \) bits, and the perplexity is \( 2^{3.23} = 9.4 \).</p>
+<p>Read the last number carefully, because it is the one people misread. A perplexity of 9.4 on a vocabulary of 4 does not mean the model was choosing among nine options &mdash; there were only four. It means this particular prediction was <em>worse</em> than guessing uniformly, which would have cost \( \log_2 4 = 2 \) bits. Perplexity is an effective branching factor, and nothing stops it exceeding the real one when the model is confidently wrong. That is exactly what happened here: 0.789 of the mass went somewhere else.</p>
 </div>
-
-<p>The second requirement is asymmetry. Suppose every weight in a layer were initialized to the same constant. Then every unit in that layer computes the identical function of the inputs, receives the identical gradient, and updates identically &mdash; forever. The layer, however wide, collapses to a single effective unit, and no amount of training breaks the tie. This is why initialization must be <em>random</em>: randomness is what breaks the symmetry between units and lets them specialize. It is a one-line argument, but it is the reason a fundamental-looking operation &mdash; &ldquo;set the weights to a sensible constant&rdquo; &mdash; is quietly fatal.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 2.2</span>
-<p class="title">Symmetry never breaks itself</p>
-<p>Consider two units in a layer, with incoming weight vectors \( w_1 \) and \( w_2 \), fed the same inputs. If \( w_1 = w_2 \) at initialization, then their outputs are equal at every input, so the loss depends on them only through their sum. The gradient of the loss with respect to \( w_1 \) therefore equals the gradient with respect to \( w_2 \), and one gradient step keeps \( w_1 = w_2 \). By induction the two are equal for all time. The only way to give them distinct gradients is to start them at distinct values &mdash; hence random initialization.</p>
-</div>
-
-<p>A small practical corollary closes the chapter, and it too is pure Chapter-1 reasoning. Units with a rectified activation &mdash; zero for negative inputs, linear for positive &mdash; contribute no gradient when their input is negative, and a unit that begins with a negative bias may sit dead from the start. Nudging the initial bias slightly positive shifts the input distribution rightward, so more units begin in their active region and receive gradient. The same variance-and-mean bookkeeping that governs the weights governs this choice; it is not a trick so much as an accounting consequence.</p>
 
 <div class="drill">
 <span class="label">Drill 2.2</span>
-<p>A layer has fan-in \( m = 1024 \). (a) What \( \sigma \) preserves unit output variance? (b) If instead \( \sigma = 0.05 \) is used, what is the output variance, and does the signal grow or shrink across the layer?</p>
+<p>(a) Logits are \( (2, 0, -1) \). Give the softmax probabilities. &nbsp; (b) Add 5 to every logit and give them again. &nbsp; (c) A model assigns the true token probability \( 0.25 \). Give the cross-entropy loss in nats and in bits.</p>
 <details><summary>Show answers</summary>
-<p>(a) \( \sigma = 1/\sqrt{1024} = 1/32 \approx 0.031 \). (b) Output variance \( = 1024 \times 0.0025 = 2.56 \); since this exceeds 1, the signal <em>grows</em> across the layer, and would explode across a deep stack.</p>
+<p>(a) \( e^2 = 7.389 \), \( e^0 = 1 \), \( e^{-1} = 0.368 \); total \( 8.757 \). Probabilities \( (0.844, 0.114, 0.042) \). &nbsp; (b) Identical &mdash; the shared factor \( e^5 \) cancels. &nbsp; (c) \( -\ln 0.25 = 1.386 \) nats \( = -\log_2 0.25 = 2 \) bits.</p>
 </details>
 </div>
 
-<h2>2.5 What the chapter bought</h2>
-<p>Everything that follows rests on what this chapter established, and all of it came from Chapter 1's tools. The stable step size is capped by the steepest curvature, so a badly conditioned problem is slow no matter how patient you are. Momentum converts that \( \kappa \)-sized penalty into a \( \sqrt{\kappa} \)-sized one &mdash; the first appearance of a theme, adaptivity to geometry, that runs through the rest of the field. And initialization is a variance-and-symmetry problem whose answers are forced, not chosen. Chapter 3 takes up the complementary question: if optimization is this sensitive to the shape of the surface, can we <em>build</em> networks whose surfaces are easier to descend? The answer &mdash; residual connections &mdash; is where architecture begins to do the optimizer's job for it.</p>
+<h2>2.3 Jacobians, and what backpropagation computes</h2>
+<p>A network is a composition of functions, so its derivatives are governed by the chain rule. When the functions map vectors to vectors, the object playing the role of a derivative is the <strong>Jacobian</strong>: for \( y = F(x) \) with \( x \in \mathbb{R}^m \) and \( y \in \mathbb{R}^n \), the Jacobian \( J \) is the \( n \times m \) matrix whose \( (i,j) \) entry is \( \partial y_i / \partial x_j \). It says how each output responds to each input.</p>
+<p>The chain rule then reads as a matrix product. For a stack of \( \ell \) transformations, the sensitivity of the last output to the first input is</p>
+\[ \frac{\partial h_L}{\partial h_0} = J_L\,J_{L-1}\cdots J_1, \]
+<p>and this product &mdash; a long chain of matrices multiplied together &mdash; is the single most consequential object in Part II. If the factors shrink, the product vanishes geometrically with depth; if they grow, it explodes. Chapter 4 fixes the first problem by adding an identity to every factor, and Chapter 5 meets the same product running along time instead of depth.</p>
+<p><strong>Backpropagation</strong> is the name for evaluating this product efficiently: sweep forward storing activations, then sweep backward multiplying by one Jacobian at a time, accumulating the gradient with respect to each layer's parameters as you pass it. Two facts about it are used later and neither requires the algorithm's details. The backward sweep costs roughly twice the forward sweep, for the reason the next box counts. And the activations from the forward pass must be kept until the backward sweep reaches them, which is why they occupy memory &mdash; the third of the budgets Chapter 13 names.</p>
+
+<div class="box deriv">
+<span class="label">Derivation</span>
+<p class="title">Six operations per parameter per token</p>
+<p>The two facts above are enough to price training, and the number they produce carries four later chapters. Work in <em>floating-point operations</em> rather than multiply&ndash;accumulates, since that is the unit accelerators are sold in: one multiply&ndash;accumulate is a multiply and an add, so it is <strong>2 FLOPs</strong>.</p>
+<p><em>Forward.</em> By Chapter 1's corollary, each of the \( N \) parameters is used in one multiply&ndash;accumulate per token. That is \( N \) multiply&ndash;accumulates, or \( 2N \) FLOPs per token.</p>
+<p><em>Backward.</em> Each layer must produce two gradients, not one: the gradient with respect to its input, to hand to the layer below, and the gradient with respect to its own weights. Each is a product against the same weight matrix and costs what the forward pass cost. So the backward sweep is \( 2N \) multiply&ndash;accumulates, or \( 4N \) FLOPs per token &mdash; twice the forward pass, which is the origin of that ratio.</p>
+<p>Adding them, training costs about \( 6N \) FLOPs per token, so a run over \( D \) tokens costs</p>
+\[ C \approx 6ND \ \text{FLOPs}, \]
+<p>and serving, which performs the forward pass alone, costs about \( 2N \) FLOPs per generated token. The 6 and the 2 are not measurements of anything. They are 2 FLOPs per multiply&ndash;accumulate times one, two or three passes over the weights, and Chapters 7, 11 and 17 spend their entire budgets in these units.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 2.4</span>
+<p>(a) A 13-billion-parameter model is trained on 2 trillion tokens. Give the training cost in FLOPs. &nbsp; (b) The same model serves \( 5\times10^{12} \) tokens over its life. Give the serving cost, and its ratio to training. &nbsp; (c) Why is the backward pass twice the forward one rather than the same or three times?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 6 \times 1.3\times10^{10} \times 2\times10^{12} = 1.56\times10^{23} \) FLOPs. &nbsp; (b) \( 2 \times 1.3\times10^{10} \times 5\times10^{12} = 1.3\times10^{23} \), about \( 0.83 \) times the training cost &mdash; serving a popular model is the same order of expense as building it, which is the whole of Chapter 17. &nbsp; (c) Because two gradients are needed at each layer and only one activation: one gradient flows down to the previous layer, one lands on the weights. A layer at the very bottom needs only the second, which is why 6 is an approximation slightly on the high side.</p>
+</details>
+</div>
+
+<h2>2.4 Tokens</h2>
+<p>Language models do not consume characters or words. Text is first cut into <strong>tokens</strong>, drawn from a fixed <strong>vocabulary</strong> of size \( V \), typically tens of thousands of entries: common words are single tokens, rare words split into several pieces, and every possible string is representable because single bytes are in the vocabulary as a fallback. The number of tokens a corpus becomes is what the symbol \( D \) counts in Chapter 7, and the <strong>compression ratio</strong> &mdash; characters per token, usually around four for English &mdash; is what converts between a corpus's size on disk and its size in the units this book budgets in.</p>
+<p>A token is turned into a vector by lookup in an <strong>embedding</strong> matrix of shape \( V \times d \), where \( d \) is the model's width; one row per vocabulary entry. At the other end, a <strong>readout</strong> matrix of shape \( d \times V \) turns the final activations back into \( V \) logits. When the two matrices are the same array used twice they are called <strong>tied</strong>, which saves \( Vd \) parameters; when they are separate they are <strong>untied</strong>. Both tables scale with vocabulary rather than with depth, which is why Chapter 5 finds them occupying nearly half of a small model and why scaling studies count parameters excluding them.</p>
+
+<div class="drill">
+<span class="label">Drill 2.3</span>
+<p>A model has \( d = 4096 \) and \( V = 32{,}000 \), with untied embedding and readout. (a) How many parameters sit in the two tables together? (b) A corpus of 40 GB of English text is tokenized at four characters per token; roughly how many tokens is that?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 2 \times 32{,}000 \times 4096 = 262 \) million. &nbsp; (b) Roughly \( 4\times10^{10}/4 = 10^{10} \) tokens, ten billion &mdash; assuming one byte per character, which for English is close enough.</p>
+</details>
+</div>
+
+<h2>2.5 Normalization</h2>
+<p>A <strong>normalization layer</strong> takes a vector, subtracts its mean, divides by its standard deviation, and then applies a learned scale and shift:</p>
+\[ \operatorname{norm}(x)_i = \gamma_i\,\frac{x_i - \mu}{\sqrt{s^2 + \epsilon}} + \beta_i, \qquad \mu = \frac{1}{d}\sum_j x_j,\ \ s^2 = \frac{1}{d}\sum_j (x_j - \mu)^2, \]
+<p>with \( \epsilon \) a small constant guarding against division by zero, and \( \gamma, \beta \) learned vectors of width \( d \). The point is that whatever the layer receives, what it emits has a controlled scale, set by \( \gamma \) rather than by whatever happened upstream. Variants differ in what they average over and in whether they bother to subtract the mean; none of those distinctions matters to any calculation in this book. What matters is <em>where</em> such a layer is placed, which Chapter 4 settles by an argument about accumulated variance.</p>
+
+<h2>2.6 Divergence between two distributions</h2>
+<p>Two distributions over the same set can be compared by a single number. The <strong>Kullback&ndash;Leibler divergence</strong> from \( q \) to \( p \) is</p>
+\[ \mathrm{KL}(p \,\|\, q) = \sum_i p_i \ln\frac{p_i}{q_i} \quad \text{nats}, \]
+<p>the average, under \( p \), of the log-ratio between the two. Read it as a cost: it is the number of extra nats per outcome you pay for encoding data that really follows \( p \) using a code built for \( q \). Three properties are all that later chapters use. It is never negative. It is zero exactly when \( p = q \). And it is not symmetric &mdash; \( \mathrm{KL}(p\|q) \) and \( \mathrm{KL}(q\|p) \) are different numbers, so the order of the arguments is never decorative.</p>
+<p>Chapter 10 evaluates this for two Gaussians and reads the answer as the price of a weight's precision. Chapter 14 uses it as a leash, penalizing a policy for drifting from the one it started as. Both are the same formula with different distributions substituted in.</p>
+
+<div class="drill">
+<span class="label">Drill 2.4</span>
+<p>Let \( p = (0.5, 0.5) \) and \( q = (0.9, 0.1) \). Compute \( \mathrm{KL}(p\|q) \) and \( \mathrm{KL}(q\|p) \) in nats, and confirm they differ.</p>
+<details><summary>Show answers</summary>
+<p>\( \mathrm{KL}(p\|q) = 0.5\ln(0.5/0.9) + 0.5\ln(0.5/0.1) = 0.5(-0.588) + 0.5(1.609) = 0.511 \). \( \mathrm{KL}(q\|p) = 0.9\ln(0.9/0.5) + 0.1\ln(0.1/0.5) = 0.9(0.588) + 0.1(-1.609) = 0.368 \). Different, as promised, and both positive.</p>
+</details>
+</div>
+
+<h2>2.7 What the chapter bought</h2>
+<p>Nothing was derived here, and that is the point: these seven objects are now written down, so that later chapters can compute with them instead of around them. A layer is a matrix, a bias and a nonlinearity, and its cost per input is its parameter count. Gradient descent steps against the gradient; momentum steps against a running average of gradients, and that running average is a geometric series. Softmax turns logits into probabilities, sees only their differences, and stops responding when it saturates. A network's sensitivity is a product of Jacobians, and long products are the recurring danger of Part II. Text becomes tokens, and tokens become rows of two large tables that scale with vocabulary rather than depth. Normalization fixes the scale of what leaves a layer. And a divergence prices the gap between two distributions, asymmetrically.</p>
+<p>Chapter 3 begins the actual subject, and it begins by taking the humblest object above &mdash; the gradient step of Section 2.1 &mdash; and asking a question that held the field back for twenty years: not whether a good setting of \( \theta \) exists, but whether stepping downhill can ever reach it.</p>
 
 <h2>Exercises</h2>
+<p>These check that the objects are in place, nothing more. If they are slow, reread the section rather than pressing on; every later chapter assumes this vocabulary silently. Solutions to B and C are in Appendix D.</p>
+
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A valley has curvatures \( \lambda_{\max} = 50 \), \( \lambda_{\min} = 2 \). Give \( \kappa \) and the largest stable step size.</li>
-<li>For \( \kappa = 100 \), compute \( \rho_{\text{GD}} \) and \( \rho_{\text{mom}} \) to four decimal places.</li>
-<li>A layer of fan-in 256 is to preserve activation variance. What weight standard deviation does that require?</li>
-<li>Explain in two sentences why initializing all weights of a layer to \( 0.1 \) is no better than initializing them all to \( 0 \).</li>
+<li>A layer maps width 512 to width 512 with biases. Give its parameter count and its cost per input in multiply&ndash;accumulates.</li>
+<li>Logits are \( (1, 1, 1, 1) \). Give the softmax probabilities, and the cross-entropy loss in bits if the first option is correct.</li>
+<li>Write the momentum update, and give the limiting value of \( v \) under a constant gradient \( g \) at \( \beta = 0.95 \).</li>
+<li>A model has \( V = 50{,}000 \) and \( d = 768 \), with tied embedding and readout. How many parameters are in the table?</li>
+<li>State two properties of \( \mathrm{KL}(p\|q) \) that hold for every \( p \) and \( q \).</li>
 </ol>
 </div>
+
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>The valley, end to end.</strong> For the surface \( L(x,y) = \tfrac12(\lambda_1 x^2 + \lambda_2 y^2) \) with \( \lambda_1 = 200 \), \( \lambda_2 = 2 \): (a) give the largest stable \( \eta \); (b) with \( \eta \) set to \( 90\% \) of that ceiling, give the per-step contraction factor along each axis; (c) estimate how many steps the shallow direction needs to contract a hundredfold, and comment on how many the steep direction &ldquo;wastes&rdquo; oscillating.</li>
-<li><strong>The square-root promise.</strong> Show that for large \( \kappa \), the ratio of plain-descent steps to momentum steps for a fixed error reduction tends to \( \sqrt{\kappa} \). (Hint: expand \( \ln(1/\rho) \) for each rate when \( \kappa \) is large.)</li>
-<li><strong>Compounded initialization error.</strong> A twelve-layer stack, each layer fan-in 500, is initialized with a uniform \( \sigma = 1/\sqrt{1000} \) &mdash; a factor \( \sqrt{2} \) too small. By what factor has the activation variance changed after all twelve layers, relative to a variance-preserving initialization?</li>
+<li><strong>Where the parameters are.</strong> A model has \( d = 1024 \), \( V = 32{,}000 \), untied tables, and twelve identical hidden layers of width 1024 with biases. Give the parameter count of the tables, of the twelve layers, and the fraction of the total that the tables occupy. Then say what happens to that fraction as the number of layers grows, and why scaling studies quote parameter counts excluding the tables.</li>
+<li><strong>Saturation, numerically.</strong> Compute the softmax of \( (a, 0) \) for \( a = 1, 4, 10 \). For each, give the probability of the first option and the derivative \( \sigma'(a) = \sigma(a)(1-\sigma(a)) \) of that probability with respect to \( a \). State in one sentence what happens to the gradient as the gap widens, and why a network whose logits grow without limit stops learning.</li>
+<li><strong>The product of Jacobians.</strong> Suppose every layer in a stack of \( L \) has the same Jacobian \( J = cI \) for a scalar \( c \). Give the product over \( L \) layers, and evaluate its magnitude for \( c = 0.9 \) and \( c = 1.1 \) at \( L = 50 \). Comment on what this says about how narrow the usable range of \( c \) is.</li>
 </ol>
 </div>
+
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Reconditioning by rescaling.</strong> Suppose a diagonal preconditioner multiplies the gradient along each axis by the reciprocal of that axis's curvature, so the effective update along axis \( i \) becomes \( x_i \leftarrow (1 - \eta)x_i \). Show that this makes the effective condition number 1, and explain in a sentence what real second-order and adaptive methods are approximating when they do something like this. (This is the conceptual bridge from this chapter to why adaptive optimizers exist.)</li>
+<li><strong>Why the loss is a length.</strong> Cross-entropy is \( -\ln q_i \) for the outcome that occurred; the KL divergence is \( \sum_i p_i \ln (p_i/q_i) \). Show that the average cross-entropy under the true distribution \( p \) equals the entropy of \( p \) plus \( \mathrm{KL}(p\|q) \). Conclude that minimizing cross-entropy is minimizing a divergence against a floor you cannot remove, and identify what that floor corresponds to in a language model. (You are deriving, in one line, the shape of the loss surface Chapter 7 minimizes and the irreducible term it carries.)</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 2 &middot; Pass before Chapter 3</span>
-<p>Reproduce Derivation 2.1 (the stable step range) and the \( \sqrt{\kappa} \) argument of B-2 on blank paper, then attempt B-1 closed book. This is the first of the three derivations carrying the three-separate-days protocol: return to the \( \kappa \)-versus-\( \sqrt{\kappa} \) result on two later days and reproduce it cold each time. It is the template for the compute-optimal derivation of Chapter 6, and the fluency you build here is the fluency you will spend there.</p>
+<p>Closed book, twenty minutes. Write down, from memory and with every symbol named: the layer equation, the gradient-descent and momentum updates, the softmax, the cross-entropy loss, the Jacobian chain product, and the KL divergence. Then attempt A-2 and B-2. You pass when all seven are correct and complete &mdash; not approximately right. Every one of them appears inside a derivation you will be asked to reproduce later, and a symbol you cannot define is a derivation you cannot check.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 2</h4>
 <ul>
-<li><a href="https://www.cs.toronto.edu/~jmartens/docs/Deep_HessianFree.pdf">Martens, <em>Deep Learning via Hessian-Free Optimization</em> (2010)</a><span class="how">Read the first two sections for the pathological-curvature argument in its original setting &mdash; the paper that made conditioning central.</span></li>
-<li><a href="https://proceedings.neurips.cc/paper/2012/hash/c399862d3b9d6b76c8436e924a68c45b-Abstract.html">Krizhevsky, Sutskever &amp; Hinton, <em>ImageNet Classification with Deep CNNs</em> (2012)</a><span class="how">The initialization and optimization choices in Sections 3&ndash;5 are the practical face of this chapter's theory.</span></li>
-<li><a href="https://cs231n.github.io/neural-networks-3/">Stanford CS231n &mdash; Optimization notes</a><span class="how">The standing reference for step sizes, momentum, and adaptive methods; work the update-rule sections against your Derivation 2.1.</span></li>
-<li><a href="https://distill.pub/2017/momentum/">Goh, <em>Why Momentum Really Works</em> (Distill, 2017)</a><span class="how">An interactive derivation of exactly the \( \sqrt{\kappa} \) result; move the sliders until the geometry is intuitive.</span></li>
+<li><a href="https://www.3blue1brown.com/topics/neural-networks">Sanderson, <em>Neural Networks</em> (3Blue1Brown)</a><span class="how">Episodes 1 and 2, about forty minutes. The only reading in this book that is prerequisite rather than supplementary: watch it before Chapter 3 if Section 2.1 was the first time you had seen a layer written down.</span></li>
+<li><a href="https://udlbook.github.io/udlbook/">Prince, <em>Understanding Deep Learning</em></a><span class="how">Chapters 3 and 4 for layers and networks, Chapter 7 for backpropagation. The reference to consult whenever this chapter's compression is too severe; free, and rigorous where we are brisk.</span></li>
+<li><a href="https://karpathy.github.io/neuralnets.html">Karpathy, <em>Hacker's Guide to Neural Networks</em></a><span class="how">Chapter 1, &ldquo;Real-valued Circuits&rdquo;, and stop at the end of it. Section 2.3 asserts what that chapter derives gate by gate, and doing it once by hand is worth an hour.</span></li>
+<li><a href="https://arxiv.org/abs/1508.07909">Sennrich, Haddow &amp; Birch, <em>Neural Machine Translation of Rare Words with Subword Units</em> (2015)</a><span class="how">Section 3, three pages, for how a vocabulary is actually built by merging frequent pairs. This is the algorithm Lab 1 asks you to implement.</span></li>
+<li><a href="https://colah.github.io/posts/2015-09-Visual-Information/">Olah, <em>Visual Information Theory</em></a><span class="how">The Cross-Entropy and Kullback&ndash;Leibler Divergence sections, and stop there. Its pictures make the asymmetry of Section 2.6 obvious in a way the formula does not.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 2 &middot; The Geometry of Training</span>
-  <span><a href="chapter-03.html">Next: The Architecture of Depth &rarr;</a></span>
+  <span>Chapter 2 &middot; The Objects</span>
+  <span><a href="chapter-03.html">Next: The Geometry of Training &rarr;</a></span>
 </footer>
 
 </div>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 15 · Generation by Denoising — The Arithmetic of Intelligence</title>
+<title>Chapter 15 · Thinking at Inference Time — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,124 +24,109 @@
 
 <header class="opener">
   <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 15</span>
-  <h1 class="ch">Generation by Denoising</h1>
-  <p class="ch-blurb">Destroy an image gradually with noise until nothing remains, then train a network to undo one step of the destruction. Run it backward and you have a generator &mdash; and the whole construction rests on the fact that Gaussians compose.</p>
+  <h1 class="ch">Thinking at Inference Time</h1>
+  <p class="ch-blurb">Compute can be spent when the answer is needed, not only when the model is built. But sampling more answers only helps if you can tell which one is right &mdash; and that distinction decides everything.</p>
 </header>
 
-<p class="lead">Take a photograph and add a little noise. Add a little more. Keep going until nothing is left but static. Now train a network to undo one step of that, and run it backwards from pure noise. What comes out is a photograph that never existed. It is a strange way to build a generator, and the reason it is tractable at all is a fact about Gaussians you met in Chapter 1.</p>
+<p class="lead">All the compute so far has been spent before the user arrives. But you can also spend it afterwards: sample the same question ten times, or a hundred, and pick the best answer. Whether that helps turns entirely on a question people routinely skip &mdash; if a correct answer is somewhere in your hundred samples, how exactly do you intend to find it?</p>
 
-<h2>15.1 The forward process collapses</h2>
-<p>The corruption is defined one step at a time: blend the current image with fresh Gaussian noise,</p>
-\[ x_t = \sqrt{1-\beta_t}\,x_{t-1} + \sqrt{\beta_t}\,\epsilon, \qquad \epsilon \sim \mathcal{N}(0, I), \]
-<p>with a small schedule \( \beta_t \). Applied a thousand times, this leaves pure noise. Simulating a thousand steps to produce a training example would be intolerable &mdash; but we do not have to, because a chain of Gaussian blends is itself a single Gaussian blend.</p>
+<h2>15.1 Coverage: the arithmetic of many attempts</h2>
+<p>Sample \( k \) independent attempts at a problem, each succeeding with probability \( p \). The probability that <em>at least one</em> succeeds is one minus the probability all fail:</p>
+\[ \text{coverage}(k) = 1 - (1-p)^{k}. \]
+<p>This grows quickly &mdash; faster than most people expect, which is exactly what makes the next point so easy to miss. A model that solves a problem one time in twenty covers half of such problems within fourteen attempts. But note carefully what has been computed: the probability that a correct answer is <em>somewhere in the set</em>. Whether you can deliver it depends on whether you can identify it.</p>
 
-<p>There is a practical problem to notice before the mathematics. Training requires showing the network images corrupted to every possible degree. If reaching corruption level eight hundred meant actually running eight hundred steps of noising for every training example, the method would be far too slow to use. So the question that has to be answered first is whether we can jump straight to any level in one operation. The answer is yes, and the reason is a fact about Gaussians you already know.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 15.1</span>
-<p class="title">A thousand steps in one jump</p>
-<p>Take two steps with constants \( \beta_1, \beta_2 \), and write \( \alpha_t = 1-\beta_t \). Then \( x_1 = \sqrt{\alpha_1}x_0 + \sqrt{1-\alpha_1}\,\epsilon_1 \) and</p>
-\[ x_2 = \sqrt{\alpha_2}\,x_1 + \sqrt{1-\alpha_2}\,\epsilon_2 = \sqrt{\alpha_2\alpha_1}\,x_0 + \sqrt{\alpha_2(1-\alpha_1)}\,\epsilon_1 + \sqrt{1-\alpha_2}\,\epsilon_2. \]
-<p>The two noise terms are independent Gaussians, so &mdash; variances add &mdash; their sum is a single Gaussian of variance \( \alpha_2(1-\alpha_1) + (1-\alpha_2) = 1 - \alpha_1\alpha_2 \). Hence \( x_2 = \sqrt{\bar\alpha_2}\,x_0 + \sqrt{1-\bar\alpha_2}\,\epsilon \) with \( \bar\alpha_2 = \alpha_1\alpha_2 \). By induction,</p>
-\[ q(x_t \mid x_0) = \mathcal{N}\bigl(\sqrt{\bar\alpha_t}\,x_0,\ (1-\bar\alpha_t)I\bigr), \qquad \bar\alpha_t = \prod_{s \le t}(1-\beta_s). \]
-<p>Any noise level is reachable in one draw. Note the coefficients: \( \sqrt{\bar\alpha} \) multiplies the signal and \( \sqrt{1-\bar\alpha} \) the noise, so their variances sum to 1 &mdash; the check that catches nearly every algebra slip here.</p>
+<div class="box trap">
+<span class="label">Trap &middot; T4 &middot; coverage is not accuracy</span>
+<p>Coverage is the most over-quoted number in this part of the field. It measures whether a correct answer exists among the samples, not whether the system returns one. You only realize coverage in production if you have a <em>selector</em> &mdash; a verifier, a test suite, a reward model &mdash; that picks the right sample. Reporting coverage as though it were accuracy overstates a system by exactly the selector's fallibility, which is often large.</p>
 </div>
 
-<p>The quantity that gives the schedule meaning is the signal-to-noise ratio, \( \mathrm{SNR}(t) = \bar\alpha_t/(1-\bar\alpha_t) \), which slides from very large to nearly zero. Training samples a random \( t \), corrupts a real image to that level, and asks the network to predict the noise that was added. The network thus learns to denoise at every level at once &mdash; a curriculum in a single objective.</p>
+<p>With a selector of reliability \( v \) &mdash; the probability it identifies a correct answer when one is present &mdash; the delivered accuracy is roughly \( v\bigl[1-(1-p)^k\bigr] \). The selector, not the sampler, is usually the binding constraint.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 15.1</span>
-<p class="title">Reading a schedule</p>
-<p>Take a constant \( \beta = 0.02 \), so \( \bar\alpha_t = 0.98^t \). The half-signal point, where \( \mathrm{SNR} = 1 \), is where \( 0.98^t = 0.5 \): \( t = \ln 0.5/\ln 0.98 = 0.693/0.0202 = \) <span class="keynum">34</span>. By \( t = 100 \), \( \bar\alpha = 0.98^{100} = e^{-2.02} = 0.133 \) and the SNR is \( 0.133/0.867 = 0.15 \) &mdash; structure nearly gone.</p>
-<p>Observe that this is arithmetically the same computation as Chapter 8's emergence frontier \( p^k = \tfrac12 \). Different subject, identical reflex.</p>
+<p class="title">Small model, many tries, against big model, one try</p>
+<p>Compare at equal compute. A small model costs 1 unit per attempt and succeeds with \( p = 0.2 \). A large model costs 10 units and succeeds with \( p = 0.6 \). Budget: 10 units.</p>
+<p>The small model gets 10 attempts: coverage \( = 1 - 0.8^{10} = 1 - 0.107 = \) <span class="keynum">0.893</span>. The large model gets one: \( 0.6 \). With a <em>perfect</em> selector, sampling wins decisively.</p>
+<p>Now introduce a realistic selector at \( v = 0.7 \): delivered accuracy becomes \( 0.7 \times 0.893 = \) <span class="keynum">0.625</span> &mdash; barely better than the large model's single attempt. The entire advantage lived in the assumption of perfect selection.</p>
+<p>This is why domains with <em>automatic</em> verification &mdash; code that must pass tests, mathematics with checkable answers, where \( v \approx 1 \) &mdash; led the inference-scaling era. Where verification is hard, the strategy degrades sharply.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 15.1</span>
-<p>(a) With \( \beta = 0.01 \), at what step does \( \mathrm{SNR} = 1 \)? (b) If \( \bar\alpha = 0.36 \), write \( x_t \) explicitly in terms of \( x_0 \) and \( \epsilon \).</p>
+<p>(a) At \( p = 0.05 \), how many samples give 50% coverage? (b) Budget 32 units: model A costs 1 with \( p = 0.1 \); model B costs 8 with \( p = 0.45 \) (so four attempts). With a perfect selector, which wins?</p>
 <details><summary>Show answers</summary>
-<p>(a) \( 0.99^t = 0.5 \Rightarrow t = 0.693/0.01005 = 69 \). (b) \( x_t = 0.6\,x_0 + 0.8\,\epsilon \), since \( \sqrt{0.36} = 0.6 \) and \( \sqrt{0.64} = 0.8 \); note \( 0.36 + 0.64 = 1 \). ✓</p>
+<p>(a) \( 0.95^k = 0.5 \Rightarrow k = \ln 0.5/\ln 0.95 = 13.5 \), so 14. (b) A: \( 1 - 0.9^{32} = 0.966 \). B: \( 1 - 0.55^4 = 0.908 \). A wins narrowly.</p>
 </details>
 </div>
 
-<h2>15.2 Sampling, and how to shorten it</h2>
-<p>Generation reverses the ladder: start from noise and repeatedly subtract the network's predicted noise. Done naively this takes as many network evaluations as the forward process had steps &mdash; often a thousand, which is expensive. A reformulation of the reverse process makes it deterministic and permits <em>strides</em>: take every twentieth step instead of every step, and a thousand-step schedule becomes fifty network evaluations at modest quality cost. Since cost is proportional to the number of evaluations, this is a twentyfold saving &mdash; the single most consequential practical fact about deploying these models.</p>
+<h2>15.2 Voting, and its threshold</h2>
+<p>A cheaper form of selection is to let the samples vote: return the most common answer. Chapter 1 computed the case of five attempts at \( p = 0.6 \), giving \( 0.683 \). The governing fact is a threshold.</p>
 
-<h2>15.3 Guidance is extrapolation</h2>
-<p>To make generation follow a condition &mdash; a text prompt, say &mdash; the model is trained both with the condition and, some fraction of the time, without it. At sampling time the two predictions are combined:</p>
-\[ \tilde\epsilon = \epsilon_u + w\,(\epsilon_c - \epsilon_u), \]
-<p>where \( \epsilon_u \) is the unconditional prediction and \( \epsilon_c \) the conditional. At \( w = 0 \) this is unconditional; at \( w = 1 \) it is exactly the conditional prediction. At \( w > 1 \) &mdash; the usual setting &mdash; it goes <em>past</em> the conditional prediction, in the direction that distinguishes conditional from unconditional.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 15.2</span>
-<p class="title">Outside the interval</p>
-<p>Let \( \epsilon_u = 0.20 \), \( \epsilon_c = 0.30 \), \( w = 7.5 \). Then \( \tilde\epsilon = 0.20 + 7.5(0.10) = \) <span class="keynum">0.95</span> &mdash; far outside \( [0.20, 0.30] \). Guidance is extrapolation, not interpolation. That is both why it sharpens adherence to the prompt and why large \( w \) over-saturates and collapses diversity: you are pushing well beyond where either prediction was trained to be valid.</p>
+<div class="box deriv">
+<span class="label">Derivation 15.1</span>
+<p class="title">Voting helps only above one half</p>
+<p>For \( 2m+1 \) independent attempts each correct with probability \( p \) (assuming errors do not coordinate on a single wrong answer), the majority is correct with probability \( \sum_{j=m+1}^{2m+1}\binom{2m+1}{j}p^j(1-p)^{2m+1-j} \). By the law of large numbers this tends to 1 when \( p > \tfrac12 \) and to 0 when \( p < \tfrac12 \), as the number of attempts grows.</p>
+<p>The failure case is worth computing once. At \( p = 0.4 \) with five attempts, symmetry gives majority accuracy \( 1 - 0.683 = \) <span class="keynum">0.317</span> &mdash; <em>worse</em> than a single attempt's \( 0.4 \). Below the threshold, voting reliably amplifies the error rather than correcting it.</p>
 </div>
 
-<div class="box trap">
-<span class="label">Trap &middot; T5 and T1</span>
-<p>Three recurring slips. Reading \( w \) as a mixing weight in \( [0,1] \) &mdash; it is not; values of 5 to 10 are routine. Confusing \( \alpha_t = 1-\beta_t \) with the cumulative \( \bar\alpha_t \) &mdash; the bar denotes the product over all steps so far. And placing the square roots wrongly: it is \( \sqrt{\bar\alpha} \) on the signal and \( \sqrt{1-\bar\alpha} \) on the noise, verifiable at a glance because the variances must sum to one.</p>
-</div>
+<h2>15.3 Eliciting versus creating</h2>
+<p>The most important distinction in this chapter is not arithmetic but conceptual, and it is the one worth carrying away. Sampling many times and selecting redistributes probability mass the model <em>already had</em>. It surfaces a capability; it does not add one. If the model's per-attempt probability of solving a class of problem is zero, no amount of sampling produces a solution, and no verifier can select one from a set that contains none.</p>
+<p>Training a model to reason at length &mdash; using verifiable rewards and the group-relative method of Chapter 14 &mdash; is different in kind. It changes the weights, and therefore changes \( p \) itself. That mechanism can create a capability. Prompting a model to think step by step, at fixed weights, elicits; training it on verified reasoning traces creates.</p>
 
 <div class="drill">
 <span class="label">Drill 15.2</span>
-<p>With \( w = 3 \), \( \epsilon_u = 0.5 \), \( \epsilon_c = 0.4 \), compute \( \tilde\epsilon \) and note its direction relative to the two inputs.</p>
-<details><summary>Show answer</summary>
-<p>\( 0.5 + 3(0.4 - 0.5) = 0.5 - 0.3 = 0.2 \) &mdash; below both, because the conditional lies below the unconditional and guidance extrapolates in that direction.</p>
+<p>Classify each as eliciting or creating: (a) best-of-64 sampling with unit tests; (b) majority voting; (c) reinforcement training on verified mathematics; (d) a longer step-by-step prompt at fixed weights.</p>
+<details><summary>Show answers</summary>
+<p>(a) elicit &mdash; selects from what the model already produces. (b) elicit. (c) <strong>create</strong> &mdash; the weights change, so \( p \) itself changes. (d) elicit &mdash; no weight change; it changes which of the model's existing behaviors is expressed.</p>
 </details>
 </div>
 
-<h2>15.4 Denoising in a compressed space</h2>
-<p>Running this process at full image resolution is wasteful, because most pixel-level detail is texture that a decoder can supply. The remedy is to compress the image into a much smaller latent representation, run the entire diffusion process there, and decode at the end. The saving is roughly the compression ratio in both computation and activation memory &mdash; often a factor of dozens.</p>
-<p>Structurally this is the same division of labour we saw in Chapter 3's bottleneck block and Chapter 12's expert routing: do the expensive work in the narrow space, and let cheap machinery handle the wide one. It is worth recognizing the pattern, because it recurs whenever a field gets serious about cost.</p>
-
-<h2>15.5 What the chapter bought</h2>
-<p>The forward corruption collapses to a single Gaussian because variances add &mdash; making training tractable at any noise level in one draw. The signal-to-noise ratio gives the schedule its meaning, and its half-signal point is a logarithm. Sampling can be strided, turning a thousand evaluations into fifty. Guidance extrapolates beyond the conditional prediction, buying adherence at the cost of diversity. And running the whole process in a compressed latent space is the same narrow-middle economy that recurs throughout this book. One chapter remains: what all of this costs over a model's entire life, and how that changes what model you should have trained in the first place.</p>
+<h2>15.4 What the chapter bought</h2>
+<p>Coverage grows as \( 1-(1-p)^k \) and is not accuracy; the selector's reliability multiplies it, and in domains without automatic verification that multiplier dominates. Voting is a cheap selector with a hard threshold at one half, below which it actively hurts. And the elicit&ndash;create distinction separates the mechanisms that surface existing ability from the one that manufactures it. Chapter 16 leaves language entirely for the era's other generative pillar, where an image is produced by reversing a controlled corruption.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>With \( \beta = 0.005 \), find the step at which \( \mathrm{SNR} = 1 \).</li>
-<li>At \( \bar\alpha = 0.81 \), write the coefficients on \( x_0 \) and \( \epsilon \), and verify they are consistent.</li>
-<li>Compute \( \tilde\epsilon \) for \( w = 5 \), \( \epsilon_u = 0.1 \), \( \epsilon_c = 0.25 \).</li>
-<li>A 1000-step schedule is strided by 25. How many network evaluations does sampling take?</li>
+<li>At \( p = 0.3 \), give the coverage of 8 samples.</li>
+<li>How many samples reach 90% coverage at \( p = 0.15 \)?</li>
+<li>Five attempts at \( p = 0.55 \): give the majority-correct probability.</li>
+<li>Coverage 0.95 with a selector of reliability 0.6: give the delivered accuracy.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Composing two steps.</strong> Carry out Derivation 15.1 in full for two steps with distinct \( \beta_1 = 0.01 \) and \( \beta_2 = 0.03 \): give \( \bar\alpha_2 \), the coefficients on \( x_0 \) and on the combined noise, and verify the variances sum to one. Then state the induction step for general \( t \).</li>
-<li><strong>Designing a schedule.</strong> You want \( \mathrm{SNR} = 1 \) to occur at step 200 under a constant \( \beta \). Find \( \beta \). Then compute \( \bar\alpha \) at step 500 under that schedule.</li>
-<li><strong>The cost of guidance.</strong> Classifier-free guidance requires both a conditional and an unconditional prediction at every sampling step. State the multiplier this puts on sampling cost, and combine it with a stride of 20 on a 1000-step schedule to give the total number of network evaluations. Compare against unguided, unstrided sampling.</li>
+<li><strong>Matched compute, honestly.</strong> A small model costs 1 unit at \( p = 0.15 \); a large model costs 24 units at \( p = 0.55 \). At a budget of 24 units &mdash; so exactly one large-model attempt, or twenty-four small ones &mdash; compare delivered accuracy under selectors of reliability \( v = 1.0 \), \( 0.8 \), and \( 0.6 \) (applying \( v \) to the sampling strategy only, since the single large-model answer needs no selection). At what \( v \) do they tie?</li>
+<li><strong>The voting threshold.</strong> For three independent attempts, derive the majority-correct probability \( 3p^2(1-p) + p^3 \) and show it exceeds \( p \) exactly when \( p > \tfrac12 \). Then evaluate at \( p = 0.45 \) and \( p = 0.55 \) and comment.</li>
+<li><strong>When to stop sampling.</strong> Each additional sample adds expected coverage \( (1-p)^k \cdot p \) at a cost of one unit. Given a value \( V \) per solved problem and a cost \( c \) per sample, derive the stopping condition and evaluate it for \( p = 0.1 \), \( V = 100 \), \( c = 1 \).</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>The narrow middle, three times.</strong> The bottleneck block of Chapter 3, the expert routing of Chapter 12, and the latent space of Section 15.4 all perform expensive computation in a compressed representation. For each, identify what is compressed, what does the compressing and decompressing, which budget is saved, and what is risked by compressing too aggressively. Then state the general design principle in one sentence.</li>
+<li><strong>Why temperature zero breaks everything here.</strong> All of this chapter's arithmetic assumes independent samples. Explain what happens to coverage when sampling temperature approaches zero, why the independence assumption fails, and what that implies about the relationship between diversity and inference-time scaling. Then connect this to Chapter 6's result that temperature never reorders candidates: what exactly does temperature control, and why is that the quantity that matters here?</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 15 &middot; Pass before Chapter 16</span>
-<p>Reproduce Derivation 15.1 &mdash; the two-step composition and the induction &mdash; on blank paper, and produce the SNR half-point calculation from nothing. Attempt B-1 and B-2 closed book. You pass when the coefficient placement is automatic and you check it every time by summing variances to one.</p>
+<p>Reproduce the coverage formula, the matched-compute comparison template, and Derivation 15.1's threshold on blank paper. Attempt B-1 closed book, and defend each classification in Drill 15.2 with one sentence. You pass when you never again quote a coverage figure without naming the selector.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 15</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/2006.11239">Ho, Jain &amp; Abbeel, <em>Denoising Diffusion Probabilistic Models</em> (2020)</a><span class="how">Sections 2&ndash;3. Skip the variational bound on a first pass and take Derivation 15.1's closed form as your target.</span></li>
-<li><a href="https://arxiv.org/abs/2010.02502">Song, Meng &amp; Ermon, <em>Denoising Diffusion Implicit Models</em> (2020)</a><span class="how">The strided sampling of Section 15.2; read the quality-versus-steps table.</span></li>
-<li><a href="https://arxiv.org/abs/2207.12598">Ho &amp; Salimans, <em>Classifier-Free Diffusion Guidance</em> (2022)</a><span class="how">Four pages, read fully; Worked Example 15.2 is their equation with numbers attached.</span></li>
-<li><a href="https://arxiv.org/abs/2112.10752">Rombach et al., <em>High-Resolution Image Synthesis with Latent Diffusion Models</em> (2022)</a><span class="how">Section 3 for the compressed-space argument of Section 15.4.</span></li>
-<li><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/">Weng, <em>What Are Diffusion Models?</em></a><span class="how">The consolidating survey; read after the derivations to place them among the variants.</span></li>
+<li><a href="https://arxiv.org/abs/2407.21787">Brown et al., <em>Large Language Monkeys: Scaling Inference Compute with Repeated Sampling</em> (2024)</a><span class="how">The coverage curves of Section 15.1, measured across many domains; note where verification is automatic.</span></li>
+<li><a href="https://arxiv.org/abs/2408.03314">Snell et al., <em>Scaling LLM Test-Time Compute Optimally</em> (2024)</a><span class="how">The compute-matched figure, which is Worked Example 15.1 done carefully and at scale. Note where their curves cross, and which side of the crossing a real selector puts you on.</span></li>
+<li><a href="https://arxiv.org/abs/2201.11903">Wei et al., <em>Chain-of-Thought Prompting</em> (2022)</a><span class="how">The prompting-examples figure, for where sequential inference-time scaling began. Classify it yourself as eliciting or creating before you read their explanation.</span></li>
+<li><a href="https://arxiv.org/abs/2203.11171">Wang et al., <em>Self-Consistency Improves Chain of Thought Reasoning</em> (2022)</a><span class="how">The accuracy-versus-samples figure, for voting as a selector. Check their gains against Derivation 15.1's threshold, and note what happens on the tasks where the single-sample rate is below one half.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 15 &middot; Generation by Denoising</span>
-  <span><a href="chapter-16.html">Next: The Whole Lifecycle &rarr;</a></span>
+  <span>Chapter 15 &middot; Thinking at Inference Time</span>
+  <span><a href="chapter-16.html">Next: Generation by Denoising &rarr;</a></span>
 </footer>
 
 </div>

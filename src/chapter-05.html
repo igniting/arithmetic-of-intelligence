@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 5 · Attention — The Arithmetic of Intelligence</title>
+<title>Chapter 5 · Memory and Gates — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,134 +24,151 @@
 
 <header class="opener">
   <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 5</span>
-  <h1 class="ch">Attention</h1>
-  <p class="ch-blurb">Recurrence reaches the past by multiplying through every intervening step. Attention reaches it in one. The consequences &mdash; for scale, for cost, and for a famous old trick &mdash; are all arithmetic.</p>
+  <h1 class="ch">Memory and Gates</h1>
+  <p class="ch-blurb">A recurrent network remembers by multiplying. Whatever is multiplied a thousand times either vanishes or explodes &mdash; unless something pins the factor to one. That pin is the whole story.</p>
 </header>
 
-<p class="lead">A recurrent network reaches a token nine hundred positions back by passing through all nine hundred intervening steps. Attention reaches it in one. That difference sounds like a mere efficiency, but it changes what the network can learn, what it costs, and &mdash; as an old preprocessing trick will reveal &mdash; what we mean when we say a technique &ldquo;helps.&rdquo;</p>
-<p>An attention layer compares every position to every other by a dot product, turns those comparisons into weights with a softmax, and mixes the values accordingly. Three quantitative facts govern the design: the dot products must be rescaled by the square root of the dimension, or the softmax saturates; the cost is quadratic in sequence length but crosses over with the feed-forward cost only at a specific length; and the maximum distance information must travel drops from linear to constant. Each falls out of tools already in hand.</p>
+<p class="lead">A recurrent network remembers by multiplying. To carry information from step one to step three hundred, it must pass that information through three hundred multiplications, and whatever survives is what the network can recall. Multiply anything by 0.95 three hundred times and you have nothing left. Multiply by 1.0 and you have everything. Almost everything in this chapter follows from that observation.</p>
+<p>Learning long-range structure requires a gradient to travel backward across many steps, and backward travel across a recurrence is a <em>product</em> of per-step factors. Chapter 4 showed what long products do: they die or explode unless something holds them in check. Here the same problem reappears along the time axis rather than the depth axis, and the fix has the same character. What follows derives the horizon over which memory survives, the single constant that sets it, and a consequence for regularization that catches most people out.</p>
 
-<h2>5.1 Why divide by the square root of the dimension</h2>
-<p>An attention score is a dot product of a query vector and a key vector, each of dimension \( d \). If their components are independent with unit variance, Chapter 1 already told us the variance of that dot product.</p>
+<h2>5.1 The gradient horizon</h2>
+<p>First the object itself, because the whole chapter turns on one of its terms. A gated cell carries a memory vector \( c_t \) from step to step. At each step it decides how much of that memory to keep and how much new material to add:</p>
+\[ c_t = f_t \odot c_{t-1} + i_t \odot g_t, \]
+<p>where \( g_t \) is a candidate update computed from the input and the previous state, \( i_t \) is an <em>input gate</em> deciding how much of it to admit, \( f_t \) is the <em>forget gate</em> deciding how much of the old memory to retain, and \( \odot \) multiplies entrywise. Both gates are values in \( (0,1) \) produced by a logistic function &mdash; Section 2.2 &mdash; of a learned pre-activation, so the cell computes them afresh at every step rather than carrying them as fixed weights.</p>
+<p>Now differentiate. Holding the gates fixed, \( \partial c_t/\partial c_{t-1} = \operatorname{diag}(f_t) \): the memory's sensitivity to its own past is the forget gate and nothing else. That is the entire reason this architecture exists, and it is why the factor in what follows is not an abstraction but a number the network chooses.</p>
+<p>Backpropagation through time multiplies the gradient, at each step, by exactly that factor. Call it \( f \). After \( t \) steps the gradient carries \( f^t \). If \( f < 1 \), the influence decays geometrically; the number of steps over which a gradient survives is a logarithm problem of exactly the kind Chapter 1 drilled.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 5.1</span>
-<p class="title">The score variance, and the scale that tames it</p>
-<p>For \( q, k \in \mathbb{R}^d \) with independent, zero-mean, unit-variance components, the score is \( q \cdot k = \sum_{i=1}^{d} q_i k_i \). Each term is a product of independent unit-variance variables, hence has variance 1; the \( d \) terms are independent, so their variances add:</p>
-\[ \operatorname{Var}(q \cdot k) = d, \qquad \text{standard deviation} = \sqrt{d}. \]
-<p>For \( d = 512 \), the raw scores have standard deviation \( \sqrt{512} = 16\sqrt{2} \approx 22.6 \). Feeding logits of that magnitude into a softmax pushes almost all its mass onto a single entry: the output is nearly one-hot, and its gradient &mdash; which is largest when the distribution is spread out &mdash; collapses toward zero. This is the sigmoid saturation of the recurrent era reborn inside attention, and it is solved the same way: keep the pre-activation at unit scale. Dividing each score by \( \sqrt{d} \) restores the variance to 1 and keeps the softmax responsive.</p>
+<p class="title">How far back memory reaches</p>
+<p>A gradient scaled by \( f \) per step falls below a fraction \( \epsilon \) of its original size after \( t \) steps, where \( f^t < \epsilon \), i.e.</p>
+\[ t > \frac{\ln \epsilon}{\ln f}. \]
+<p>Both logarithms are negative for \( f < 1 \) and \( \epsilon < 1 \), so \( t \) is positive. With \( f = 0.95 \) and \( \epsilon = 0.01 \): \( t > \ln(0.01)/\ln(0.95) = (-4.605)/(-0.0513) = 89.8 \), so the gradient is gone after about 90 steps. With \( f = 0.5 \), the horizon collapses to \( \ln(0.01)/\ln(0.5) \approx 6.6 \) steps &mdash; a network that cannot see past the last handful of tokens.</p>
+<p>The critical case is \( f = 1 \). Then \( f^t = 1 \) for all \( t \): the gradient neither decays nor grows, and memory reaches arbitrarily far back. A recurrent cell that could hold its per-step factor at exactly one would have, in principle, unbounded memory. This is the target the gated cell was built to hit.</p>
 </div>
 
-<p>The lesson generalizes a theme running through the book. In Chapter 2 the fix for exploding activations was a \( 1/\sqrt{m} \) on the weights; here the fix for saturating scores is a \( 1/\sqrt{d} \) on the logits. Both are the same instinct &mdash; hold the variance at one as signal crosses an operation &mdash; and both are one line of variance algebra.</p>
+<p>The device that hits it is the <em>forget gate</em>. The gated cell maintains a memory that is multiplied each step not by a fixed weight but by a gate value \( f \in (0,1) \) that the network computes. When the network wants to remember, it drives the gate toward one, and the memory is carried forward almost untouched &mdash; the &ldquo;constant-error carousel&rdquo; that gives the gradient a clear channel across time. When it wants to forget, it drives the gate down. The horizon is no longer a fixed property of the architecture; it is something the network sets, token by token.</p>
 
-<div class="drill">
-<span class="label">Drill 5.1</span>
-<p>Attention operates at dimension \( d = 128 \). (a) What is the standard deviation of an unscaled score? (b) By what factor must scores be divided to restore unit variance?</p>
-<details><summary>Show answers</summary>
-<p>(a) \( \sqrt{128} = 8\sqrt{2} \approx 11.3 \). (b) Divide by \( \sqrt{128} \approx 11.3 \); this restores variance to 1.</p>
-</details>
-</div>
-
-<h2>5.2 What attention costs</h2>
-<p>A transformer layer has two expensive parts: the attention itself, and the position-wise feed-forward network that follows it. Both costs come from the matrix-multiply primitive of Chapter 1 &mdash; multiplying an \( a\times b \) matrix by a \( b\times c \) matrix costs \( abc \) multiply&ndash;accumulates &mdash; and comparing them tells you which regime a model lives in.</p>
+<h2>5.2 Setting the gate by its bias</h2>
+<p>A gate is produced by a squashing function of a learned pre-activation: \( f = \sigma(z) \), where \( \sigma \) is the logistic function and \( z \) includes a bias term. At the start of training, before the input-dependent part has learned anything, the gate sits at \( \sigma(b) \) for bias \( b \). If we want the cell to <em>default</em> to remembering &mdash; a sensible prior for tasks with long dependencies &mdash; we should choose \( b \) so that \( \sigma(b) \) is close to one.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 5.2</span>
-<p class="title">The attention&ndash;feedforward crossover</p>
-<p>For a sequence of length \( n \) and model width \( d \): attention forms an \( n\times n \) score matrix from \( n\times d \) queries and keys (\( n^2 d \) operations), then mixes an \( n\times n \) weight matrix with \( n\times d \) values (another \( n^2 d \)), totaling \( 2n^2 d \). The feed-forward network maps width \( d \) up to \( 4d \) and back, at each of \( n \) positions: \( n \cdot d \cdot 4d \) up and the same down, totaling \( 8nd^2 \). Setting them equal,</p>
-\[ 2n^2 d = 8nd^2 \quad\Longrightarrow\quad n = 4d. \]
-<p>Below \( n = 4d \), the feed-forward network dominates and attention is a minor cost. Only past that crossover does the quadratic term take over. This is why quadratic attention was tolerable for the sentence-length sequences of early machine translation and became the binding constraint only when context windows grew to thousands of tokens &mdash; a story Chapter 10 resumes in the modern setting.</p>
+<p class="title">The bias for a chosen default memory</p>
+<p>To make the forget gate open to a value \( f \) at initialization, invert the logistic: \( f = \sigma(b) = \frac{1}{1+e^{-b}} \) gives</p>
+\[ b = \ln\frac{f}{1-f}. \]
+<p>For \( f = 0.95 \): \( b = \ln(0.95/0.05) = \ln 19 = 2.94 \). Initializing the forget-gate bias near 3, rather than 0, starts the network with a memory horizon of about 90 steps (by Derivation 5.1) instead of the roughly 7 steps that \( b = 0 \), \( f = 0.5 \) would give. A single constant, chosen by a one-line inversion, changes the default reach of the network by an order of magnitude &mdash; which is why high forget-gate bias is standard practice.</p>
 </div>
 
-<p>The other cost that matters is not arithmetic but distance. In a recurrence, information from position \( i \) reaches position \( j \) only by passing through all \( |i-j| \) steps between them: the path length is linear in the gap, and it is along that long path that gradients decay. In attention, any position reaches any other in a single operation: the maximum path length is constant, independent of the gap. A token nine hundred positions back is no harder to consult than its neighbor. That collapse from linear to constant path length &mdash; not the arithmetic &mdash; is the deepest reason attention learns long-range structure where recurrence struggled.</p>
-
 <div class="drill">
-<span class="label">Drill 5.2</span>
-<p>A model has width \( d = 512 \) and feed-forward width \( 2048 \). At what sequence length do attention and feed-forward costs balance? Below that length, which dominates?</p>
-<details><summary>Show answer</summary>
-<p>\( n = 4d = 2048 \). Below \( n = 2048 \), the feed-forward network dominates.</p>
+<span class="label">Drill 5.1</span>
+<p>(a) What forget-gate value gives a horizon (to the 1% level) of about 300 steps? (b) What bias produces it?</p>
+<details><summary>Show answers</summary>
+<p>(a) Need \( \ln(0.01)/\ln f = 300 \Rightarrow \ln f = -4.605/300 = -0.01535 \Rightarrow f = 0.9848 \). (b) \( b = \ln(0.9848/0.0152) = \ln(64.8) = 4.17 \).</p>
 </details>
 </div>
 
-<h2>5.3 Temperature: reshaping confidence without reordering it</h2>
-<p>When a model samples its next token, it divides the logits by a temperature \( T \) before the softmax. This is worth a moment because a simple monotonicity argument settles what temperature can and cannot do. Dividing by a positive \( T \) is a monotone transformation of the logits: it can sharpen the distribution (small \( T \), toward the argmax) or flatten it (large \( T \), toward uniform), but it can never change which logit is largest. Temperature reshapes confidence; it never reorders the candidates.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 5.1</span>
-<p class="title">Two temperatures on a two-token vocabulary</p>
-<p>Logits are \( z_1 = 2, z_2 = 0 \). At \( T = 1 \), the probability of token 1 is \( \sigma(2) = 1/(1+e^{-2}) = 1/(1.135) = 0.881 \). At \( T = 0.5 \), the logits double to \( 4, 0 \), so \( \sigma(4) = 1/(1+e^{-4}) = 1/(1.018) = 0.982 \): colder sampling has sharpened the lead. As \( T \to 0 \) the distribution tends to the argmax; as \( T \to \infty \) it tends to uniform. At no finite positive \( T \) does token 2 overtake token 1 &mdash; monotonicity forbids it.</p>
-</div>
-
-<h2>5.4 The reversal trick, and what it reveals</h2>
-<p>Before attention, sequence-to-sequence models used a recurrent encoder to read the source and a recurrent decoder to write the target. A curious preprocessing trick helped: reversing the source sequence before encoding. Why should reading a sentence backward help translate it? The answer is one of the most instructive small calculations in the book, because it distinguishes two things students routinely conflate &mdash; optimization and representation.</p>
-
-<p>Work out what you think reversal should do before reading on. The natural expectation is that it shortens something &mdash; that reading the sentence backwards must somehow bring related words closer together, since otherwise why would it help? Write down what you would predict for the average distance between a source word and its translation. Then compare it with what follows. The gap between the two is the lesson.</p>
+<h2>5.3 Why dropout must respect the recurrent path</h2>
+<p>This next result catches almost everyone, including people who have used these networks for years. Dropout regularizes a network by randomly zeroing a fraction of its signals during training. On a feedforward network this is benign. On a recurrent network, <em>where</em> you apply it decides whether the network can remember at all &mdash; and the reason is once again the compounding of a per-step factor.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 5.3</span>
-<p class="title">The lag of the reversal trick, and its unchanged mean</p>
-<p>Suppose source and target both have length \( n \), with a strictly monotonic alignment: target position \( j \) corresponds to source position \( j \). Define the <em>lag</em> of position \( j \) as the number of recurrent steps between reading source token \( j \) and emitting target token \( j \).</p>
-<p><em>Unreversed.</em> Source token \( j \) is read at encoder step \( j \); target token \( j \) is emitted at step \( n + j \) (after the whole source is read). The lag is \( (n+j) - j = n \), the same for every position.</p>
-<p><em>Reversed.</em> The source is fed backward, so source token \( j \) is now read at step \( n - j + 1 \). Target token \( j \) is still emitted at step \( n + j \). The lag is \( (n+j) - (n-j+1) = 2j - 1 \).</p>
-<p>Now compute the mean lag over all positions:</p>
-\[ \frac{1}{n}\sum_{j=1}^{n} (2j - 1) = \frac{1}{n}\cdot n^2 = n. \]
-<p>The mean lag is <em>exactly unchanged</em> at \( n \). And the maximum lag has grown, from \( n \) to \( 2n - 1 \). By every aggregate measure of distance, reversal made things no better &mdash; and in the worst case, worse.</p>
+<p class="title">Noise on the recurrent path compounds in time</p>
+<p>Suppose dropout with keep-probability \( 0.9 \) were applied to the memory as it is carried from each step to the next &mdash; on the recurrent path itself. Then over a sequence of 100 steps, the probability that a particular piece of state survives untouched is \( 0.9^{100} \). By Chapter 1's logarithm reflex, \( 0.9^{100} = e^{100\ln 0.9} = e^{-10.54} = 2.7\times 10^{-5} \). The carried memory is annihilated; the very pathway the forget gate worked to protect is destroyed by noise applied a hundred times over.</p>
+<p>Now suppose instead the dropout is applied only to the <em>vertical</em> connections &mdash; the ones feeding from layer to layer at a single time step, not from step to step. Then a given piece of information is perturbed a number of times equal to the network's <em>depth</em>, perhaps two or three, regardless of how long the sequence is. The regularization does its job on the transformations between layers while leaving the memory-carrying pathway deterministic. That contrast &mdash; noise that compounds per time step versus noise that compounds per layer &mdash; is the entire content of a well-known result on recurrent regularization.</p>
 </div>
-
-<p>So why does it help? Because it changes the <em>distribution</em> of lags without changing their mean. Unreversed, every alignment is equally distant, \( n \) steps away; the network has no easy foothold anywhere. Reversed, the early alignments become very short &mdash; the first target position now lags its source by just one step &mdash; at the cost of longer lags later. Gradient descent can seize those early, short-lag alignments immediately, and once the beginning of the sentence is aligned, the rest follows. The trick works because optimization needs an early handhold, not because the representational problem got any smaller.</p>
 
 <div class="box trap">
-<span class="label">Trap &middot; T3</span>
-<p>The reversal trick is the canonical mean-versus-maximum confusion. It is natural to assume a trick that helps must reduce the average distance information travels &mdash; but here the mean is provably unchanged and the maximum is worse. Whenever a technique helps without improving the aggregate you first reach for, suspect that it is reshaping a distribution to aid <em>optimization</em>, not shrinking a quantity to aid <em>representation</em>. Attention, incidentally, removes the trade-off entirely by making every lag constant.</p>
+<span class="label">Trap &middot; T5</span>
+<p>It is tempting to think inverted dropout's rescaling &mdash; dividing surviving signals by the keep-probability to preserve the mean &mdash; makes recurrent-path dropout harmless. It does not. Rescaling fixes the <em>expectation</em>, but multiplicative noise compounds in <em>variance</em>, and it is the variance that destroys the carried state over a long sequence. The design goal is not an unbiased mean; it is a memory pathway that stays deterministic.</p>
 </div>
 
-<h2>5.5 What the chapter bought</h2>
-<p>Attention's \( \sqrt{d} \) scaling is the same variance-control instinct as sensible initialization, applied to logits. Its cost is quadratic in length but only overtakes the feed-forward network past \( n = 4d \), which is why quadratic attention was affordable for years. Its constant path length is the true source of its reach. And the reversal trick, properly analyzed, is a lesson in reading a technique correctly: some interventions change what a network <em>can</em> represent, and others merely change how easily gradient descent <em>finds</em> a representation &mdash; and telling the two apart is a skill the rest of the book will keep demanding. Chapter 6 takes up what becomes, once architecture stops being the bottleneck, the field's central question: given a fixed budget, how much model and how much data &mdash; answered by the derivation that turned compute-optimal training from a matter of taste into a calculation.</p>
+<h2>5.4 Counting the parameters of a recurrent layer</h2>
+<p>Before we leave recurrence, a piece of bookkeeping we will reuse. A gated cell computes four quantities per step &mdash; a candidate update and three gates &mdash; each a linear map of the concatenated input and previous hidden state, plus a bias. For input width \( d_{\text{in}} \) and hidden width \( d_h \), each of the four maps has \( d_h(d_{\text{in}} + d_h) \) weights and \( d_h \) biases, so the layer holds</p>
+\[ 4\,d_h\,(d_{\text{in}} + d_h + 1) \]
+<p>parameters. Assemble a full model from these and a pattern emerges worth noticing.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 5.1</span>
+<p class="title">Where the parameters actually are</p>
+<p>Take a language model with an embedding of width 1500 over a vocabulary of 10,000; two stacked recurrent layers each of hidden width 1500 (the first fed by the embedding); and an untied output projection back to the vocabulary, with a bias. Count each part.</p>
+<p>Embedding: \( 10{,}000 \times 1500 = 15{,}000{,}000 \). First recurrent layer: \( 4 \times 1500 \times (1500 + 1500 + 1) = 6000 \times 3001 = 18{,}006{,}000 \). Second layer: identical, \( 18{,}006{,}000 \). Output projection: \( 1500 \times 10{,}000 + 10{,}000 = 15{,}010{,}000 \). Total: \( 66{,}022{,}000 \), about 66 million.</p>
+<p>Notice that the embedding and output projection together are \( 30 \) million &mdash; about \( 45\% \) of the model &mdash; yet neither adds any depth; they are lookup and readout. This is precisely why scaling studies, when they relate capability to size, count <em>non-embedding</em> parameters: the vocabulary tables scale with vocabulary, not with the model's actual computational depth.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 5.2</span>
+<p>A single recurrent layer has input width 512 and hidden width 512. How many parameters does it hold?</p>
+<details><summary>Show answer</summary>
+<p>\( 4 \times 512 \times (512 + 512 + 1) = 2048 \times 1025 = 2{,}099{,}200 \), about 2.1 million.</p>
+</details>
+</div>
+
+<h2>5.5 Data as a lever: power laws in the wild</h2>
+<p>Recurrent models were where the field first watched error fall as a clean power law in the quantity of training data &mdash; and where the brutal economics of that law became visible. The reflex from Chapter 1, extracting an exponent from a &ldquo;per tenfold&rdquo; statement, is all we need to reason about it.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 5.2</span>
+<p class="title">The price of halving an error</p>
+<p>Suppose a speech system's word error rate obeys a power law in training hours, and each tenfold increase in data yields a \( 40\% \) relative reduction in error. Then error \( \propto D^{\beta} \) with \( 10^{\beta} = 0.6 \), so \( \beta = \log_{10} 0.6 = -0.222 \). To <em>halve</em> the error we need \( 10^{\beta x} = 0.5 \), i.e. \( x = \log_{10}(0.5)/0.222 = 0.301/0.222 = 1.36 \) decades of data &mdash; a factor of \( 10^{1.36} = 22.7 \).</p>
+<p>Starting from a \( 10\% \) error at 12,000 hours, reaching \( 5\% \) therefore demands about \( 12{,}000 \times 22.7 \approx 273{,}000 \) hours. Each halving of error costs a roughly twenty-three-fold multiplication of data. Power laws are smooth and dependable, but they are not cheap &mdash; a theme Chapter 7 will make the center of the story.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 5.3</span>
+<p>A different system improves \( 30\% \) relative per tenfold data increase. What data multiple halves its error?</p>
+<details><summary>Show answer</summary>
+<p>\( 10^\beta = 0.7 \Rightarrow \beta = \log_{10}0.7 = -0.155 \). Halving: \( x = 0.301/0.155 = 1.94 \) decades \( = 10^{1.94} \approx 88\times \).</p>
+</details>
+</div>
+
+<h2>5.6 What the chapter bought</h2>
+<p>Memory in a recurrent network is a per-step factor held near one; the horizon over which it survives is a logarithm, and the gate's initial bias sets that horizon by a one-line inversion. Regularization must respect the distinction between noise that compounds in time and noise that compounds in depth &mdash; a distinction that decides whether the network can remember at all. And error falls as a power law in data whose exponent you can read straight off a &ldquo;per tenfold&rdquo; statement, with consequences for cost that scale is about to make unavoidable. Chapter 6 introduces the mechanism that replaced the recurrent product entirely: attention, which reaches any past token in a single step, and whose own design choices &mdash; the \( \sqrt{d} \) scaling chief among them &mdash; fall straight out of the variance algebra we have been using all along.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>Attention runs at \( d = 256 \). Give the standard deviation of an unscaled score and the required scaling factor.</li>
-<li>A model has width \( d = 768 \). Give the sequence length at which attention and feed-forward costs balance.</li>
-<li>Logits are \( 3, 1 \). Give the probability of the first token at temperature \( T = 1 \) and \( T = 0.5 \).</li>
-<li>For a source of length \( n = 6 \) with the reversal trick, give the lag of positions 1 and 6.</li>
+<li>A forget gate sits at \( f = 0.9 \). Over how many steps does a gradient fall to 1% of its value?</li>
+<li>What forget-gate bias yields \( f = 0.99 \) at initialization?</li>
+<li>A recurrent layer has input width 800 and hidden width 400. Count its parameters.</li>
+<li>An error law improves \( 50\% \) relative per tenfold data. Give its exponent \( \beta \).</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Which regime.</strong> A model has width \( d = 1024 \) and is run at sequence length \( n = 8192 \). Compute the attention and feed-forward MAC counts (in units of \( d^2 \) and \( n \)), give their ratio, and state which dominates. Then find the sequence length at which they would balance.</li>
-<li><strong>The reversal trick in full.</strong> For a monotonic length-\( n \) alignment, derive the reversed lag \( 2j-1 \) from scratch, prove the mean lag is exactly \( n \), and give the maximum lag. Then explain in two sentences why the trick aids optimization despite leaving the mean unchanged.</li>
-<li><strong>Temperature cannot reorder.</strong> Prove that for any positive temperature \( T \) and any two logits \( z_a > z_b \), the softmax probability of \( a \) exceeds that of \( b \). Conclude that sampling temperature reshapes confidence but never changes the ranking of candidates.</li>
+<li><strong>Two places to put noise.</strong> A network runs 200 time steps and is 3 layers deep. Compare the expected number of times a single piece of information is perturbed under (a) dropout on the recurrent path with keep-probability 0.9, and (b) dropout only on the vertical connections with the same keep-probability. Give the surviving fraction in case (a) and the perturbation count in case (b), and state which design preserves memory.</li>
+<li><strong>Designing a horizon.</strong> You want a cell whose default memory (to the 1% level) reaches about 500 steps. Find the required forget-gate value and the bias that produces it.</li>
+<li><strong>Anatomy of a model.</strong> A model has an embedding of width 1024 over a 30,000-word vocabulary, three recurrent layers of hidden width 1024, and an untied output projection with bias. Give the total parameter count and the fraction that is embedding-plus-projection. Comment on why that fraction matters for scaling studies.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>One instinct, three chapters.</strong> The \( 1/\sqrt{m} \) of Chapter 2, the normalization-inside-the-branch of Chapter 3, and the \( 1/\sqrt{d} \) of this chapter are all the same principle. State that principle in one sentence, then show how each of the three is an instance of it, identifying in each case what quantity is being held at what value and what would go wrong otherwise.</li>
+<li><strong>The carousel as a limit.</strong> Show that the constant-error carousel &mdash; unbounded memory &mdash; is the \( f \to 1 \) limit of Derivation 5.1, and explain why a real gated cell cannot simply fix \( f = 1 \) permanently. (Hint: think about what a network that can never forget would do on a task requiring it to discard stale information, and connect this to why \( f \) is made input-dependent rather than a constant.)</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 5 &middot; Pass before Chapter 6</span>
-<p>Reproduce Derivations 5.1 (the \( \sqrt{d} \) scaling), 5.2 (the \( n = 4d \) crossover), and 5.3 (the reversal lag) on blank paper. Attempt B-1 and B-2 closed book. You pass when the crossover and the mean-lag proof come without hesitation &mdash; the latter is the one most often botched, because the sum \( \sum(2j-1) = n^2 \) must be seen instantly.</p>
+<p>Reproduce Derivations 4.1 (the horizon), 4.2 (the bias inversion), and 4.3 (the compounding contrast) on blank paper. Attempt B-1 and B-2 closed book. You pass when the horizon logarithm and the per-step-versus-per-layer distinction are both automatic &mdash; the second is the one students most often get wrong under time pressure.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 5</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/1706.03762">Vaswani et al., <em>Attention Is All You Need</em> (2017)</a><span class="how">Read for the shapes and the \( \sqrt{d_k} \) scaling of Derivation 5.1; the cost accounting of Section 5.2 is theirs made explicit.</span></li>
-<li><a href="https://nlp.seas.harvard.edu/annotated-transformer/">Rush, <em>The Annotated Transformer</em></a><span class="how">The paper rebuilt as runnable code; read it for the wiring once the derivations are clear.</span></li>
-<li><a href="https://arxiv.org/abs/1409.0473">Bahdanau, Cho &amp; Bengio, <em>Neural Machine Translation by Jointly Learning to Align and Translate</em> (2014)</a><span class="how">The original attention; the alignment maps show the constant-path-length benefit before anyone named it.</span></li>
-<li><a href="https://arxiv.org/abs/1409.3215">Sutskever, Vinyals &amp; Le, <em>Sequence to Sequence Learning with Neural Networks</em> (2014)</a><span class="how">Section 3.3 is the reversal trick of Derivation 5.3, in its original habitat.</span></li>
-<li><a href="https://lilianweng.github.io/posts/2018-06-24-attention/">Weng, <em>Attention? Attention!</em> (2018)</a><span class="how">A consolidating survey; read after the derivations to place them in the wider family of attention variants.</span></li>
+<li><a href="https://colah.github.io/posts/2015-08-Understanding-LSTMs/">Olah, <em>Understanding LSTM Networks</em> (2015)</a><span class="how">The step-by-step walkthrough section, read twice. Its gate diagrams make the constant-error carousel visual, and Derivation 5.1 is that picture's arithmetic shadow.</span></li>
+<li><a href="https://karpathy.github.io/2015/05/21/rnn-effectiveness/">Karpathy, <em>The Unreasonable Effectiveness of Recurrent Neural Networks</em> (2015)</a><span class="how">The character-level examples section, for what a working memory horizon actually buys; then the visualization section, where individual cells are shown tracking quotes and brackets across hundreds of steps &mdash; Derivation 5.1's horizon, caught in the act.</span></li>
+<li><a href="https://arxiv.org/abs/1409.2329">Zaremba, Sutskever &amp; Vinyals, <em>Recurrent Neural Network Regularization</em> (2014)</a><span class="how">Six pages. Find Derivation 5.3 &mdash; the argument for dropping only the non-recurrent connections &mdash; in their setup.</span></li>
+<li><a href="https://arxiv.org/abs/1512.02595">Amodei et al., <em>Deep Speech 2</em> (2015)</a><span class="how">The data-scaling figure, and nothing else on a first pass. Read its slope against Worked Example 5.2's power-law reasoning and check you get the same exponent from the picture.</span></li>
+<li><a href="https://www.bioinf.jku.at/publications/older/2604.pdf">Hochreiter &amp; Schmidhuber, <em>Long Short-Term Memory</em> (1997)</a><span class="how">The original. Read the introduction's account of vanishing gradients as the problem Derivation 5.1 quantifies.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 5 &middot; Attention</span>
-  <span><a href="chapter-06.html">Next: The Economics of Scale &rarr;</a></span>
+  <span>Chapter 5 &middot; Memory and Gates</span>
+  <span><a href="chapter-06.html">Next: Attention &rarr;</a></span>
 </footer>
 
 </div>

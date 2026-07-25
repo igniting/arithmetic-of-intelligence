@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 12 · Sparsity and Thrift — The Arithmetic of Intelligence</title>
+<title>Chapter 12 · Bytes over FLOPs — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,137 +24,136 @@
 
 <header class="opener">
   <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 12</span>
-  <h1 class="ch">Sparsity and Thrift</h1>
-  <p class="ch-blurb">Three ways to make a model cheaper: use only part of it per token, store it in fewer bits, or train only a thin slice of it. Each attacks a different budget, and saying which is the whole skill.</p>
+  <h1 class="ch">Bytes over FLOPs</h1>
+  <p class="ch-blurb">Two of the era's most elegant results trade arithmetic for memory traffic, and speed for nothing at all. Both are exact: neither changes a single output.</p>
 </header>
 
-<p class="lead">Three techniques in this chapter all get described with the same word: cheaper. Mixture-of-experts is cheaper. Quantization is cheaper. Low-rank adaptation is cheaper. They are cheaper in three entirely different currencies, and a great deal of professional confusion comes from not saying which. Before we begin, then, a rule: no claim of efficiency counts until it names the resource it saves.</p>
-<p>If you take one habit from this chapter, take this one. Fix the vocabulary before anything else. A training or serving system spends memory on three distinct things: the <strong>weights</strong> themselves; the <strong>gradients and optimizer state</strong> that accompany any trainable weight; and the <strong>activations</strong> held for the backward pass. Add per-token computation as a fourth resource, independent of all three. Each technique below improves exactly one of these four and leaves the rest untouched &mdash; and mistaking which is trap class T9, which is expensive in both senses of the word.</p>
+<p class="lead">Consider two claims that sound like they cannot both be true. The fastest known way to compute attention does <em>more</em> arithmetic than the obvious way. And there is a method that makes a large model generate text two or three times faster while provably producing exactly the same distribution of outputs it would have produced anyway. Both are true, and both follow from the previous chapter's finding about what is actually scarce.</p>
 
-<h2>12.1 Mixture-of-experts: decoupling size from compute</h2>
-<p>A dense layer spends every parameter on every token. A mixture-of-experts layer instead holds \( E \) parallel expert sub-networks and a small router that sends each token to the top \( k \) of them. Total parameters scale with \( E \); per-token computation scales with \( k \). The model's &ldquo;size&rdquo; splits into two numbers, and every claim about such a model must say which it means.</p>
+<h2>12.1 Attention without the score matrix</h2>
+<p>Chapter 6 counted attention's arithmetic as \( 2n^2 d \). At realistic sequence lengths, however, the binding cost is not those operations but the \( n \times n \) matrix of scores travelling to and from main memory. The output of attention is only \( n \times d \) values; the intermediate is \( n^2 \). That gap &mdash; \( \Theta(n^2) \) traffic for a \( \Theta(nd) \) result &mdash; is what an IO-aware kernel closes.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 12.1</span>
-<p class="title">Total versus active</p>
-<p>Take 32 layers; in each, attention costs 50 M parameters, and there are 8 experts of 150 M each with top-2 routing.</p>
-<p>Total: \( 32\,(50 + 8\times150)\text{ M} = 32 \times 1250\text{ M} = \) <span class="keynum">40 B</span> parameters.<br>
-Active per token: \( 32\,(50 + 2\times150)\text{ M} = 32 \times 350\text{ M} = \) <span class="keynum">11.2 B</span> parameters.</p>
-<p>So training compute (\( 6 N_{\text{active}} D \), Chapter 6) and decode arithmetic behave like an 11-billion-parameter model, while memory &mdash; every expert must be resident &mdash; behaves like a 40-billion one. A mixture-of-experts buys capacity at small-model compute prices while paying large-model rent.</p>
+<p class="title">The intermediate does not fit</p>
+<p>At \( n = 4096 \) in half precision, one head's score matrix occupies \( 2n^2 = 2 \times 4096^2 = 33.6 \) MB &mdash; larger than the reference accelerator's entire 20 MB of fast on-chip memory, and that is per head, per layer. You cannot keep it on chip; you either round-trip it through main memory at great cost, or you never form it at all.</p>
 </div>
 
-<p>The router must spread tokens evenly, or a few experts receive everything while others starve and never train. Balance is encouraged by an auxiliary loss. Writing \( f_i \) for the fraction of tokens routed to expert \( i \) and \( P_i \) for the mean router probability assigned to it,</p>
-\[ \mathcal{L}_{\text{aux}} = E \sum_{i=1}^{E} f_i P_i, \]
-<p>which equals 1 under perfect balance and exceeds 1 otherwise. It is a pressure, not a guarantee. The hard backstop is <em>expert capacity</em>: each expert accepts at most \( \text{(capacity factor)} \times \text{tokens}/E \) tokens per batch, and tokens beyond that are dropped &mdash; a quality cliff that no loss curve displays directly.</p>
+<p>Never forming it requires computing a softmax over values you see only a block at a time. That is possible, and exactly, because the softmax normalizer can be maintained incrementally.</p>
 
-<div class="box worked">
-<span class="label">Worked Example 12.2</span>
-<p class="title">Imbalance, and what it costs</p>
-<p>Two experts receive fractions \( f = (0.7, 0.3) \) with mean router probabilities \( P = (0.6, 0.4) \). Then \( \mathcal{L}_{\text{aux}} = 2\,(0.7 \times 0.6 + 0.3 \times 0.4) = 2\,(0.42 + 0.12) = 1.08 \), above the balanced minimum of 1.</p>
-<p>Now capacity. With 1024 tokens, 8 experts, and a capacity factor of 1.25, each expert accepts \( 1.25 \times 1024/8 = 160 \) tokens. If 200 tokens are routed to expert 3, then <strong>40 are dropped</strong> &mdash; they pass through without that expert's contribution.</p>
+<div class="box deriv">
+<span class="label">Derivation 12.1</span>
+<p class="title">Streaming softmax</p>
+<p>To normalize safely we subtract the running maximum before exponentiating, so nothing overflows. Maintain a running maximum \( m \) and a running sum \( \ell = \sum e^{s_i - m} \) over the scores seen so far. On receiving a new block of scores \( \{s_i\} \):</p>
+\[ m' = \max\bigl(m,\ \max_i s_i\bigr), \qquad \ell' = \ell\,e^{\,m - m'} + \sum_i e^{\,s_i - m'}. \]
+<p>The factor \( e^{m-m'} \) rescales the old partial sum into the new frame &mdash; it is never larger than 1, so the update is numerically safe. The same rescaling is applied to a running weighted sum of value vectors, so the attention output can be accumulated block by block without the score matrix ever existing in full.</p>
+<p><em>Verify that this is exact.</em> Let scores arrive as \( \{2, 1\} \) then \( \{3, 0\} \). After the first block, \( m = 2 \) and \( \ell = e^0 + e^{-1} = 1.368 \). After the second, \( m' = 3 \) and \( \ell' = 1.368\,e^{-1} + (e^0 + e^{-3}) = 0.503 + 1.050 = 1.553 \). Computing in one shot instead: \( e^{-1} + e^{-2} + e^{0} + e^{-3} = 0.368 + 0.135 + 1 + 0.050 = \) <span class="keynum">1.553</span>. Identical. The streaming form is not an approximation.</p>
+</div>
+
+<p>With this, attention is computed in tiles small enough to sit in fast memory: load a block of queries, stream blocks of keys and values past it, accumulate. Main-memory traffic falls by roughly an order of magnitude. The backward pass <em>recomputes</em> the blocks it needs rather than storing them &mdash; more arithmetic, less memory &mdash; and the kernel wins anyway. That is the roofline lesson in its purest form.</p>
+
+<div class="box trap">
+<span class="label">Trap &middot; T8 &middot; objective versus estimator</span>
+<p>This technique is <em>exact</em>. It computes the same attention function, to floating-point tolerance, as the naive implementation. Approximate attention &mdash; sparse patterns, low-rank surrogates &mdash; is a different trade entirely, buying speed with fidelity. Confusing the two is the most common misreading here: an IO-aware kernel changes <em>how</em> a quantity is computed, not <em>what</em> is computed.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 12.1</span>
-<p>A model has 48 layers; each has 60 M shared parameters and 64 experts of 40 M, with top-2 routing. Give total and active parameter counts and their ratio.</p>
-<details><summary>Show answers</summary>
-<p>Total \( = 48(60 + 64\times40)\text{M} = 48 \times 2620\text{M} = 125.8 \) B. Active \( = 48(60 + 2\times40)\text{M} = 48 \times 140\text{M} = 6.7 \) B. Ratio \( \approx 18.7 \).</p>
+<p>Scores arrive as \( \{1, 4\} \) then \( \{2, 2, 5\} \). Run the streaming update and verify against the one-shot sum.</p>
+<details><summary>Show answer</summary>
+<p>Block 1: \( m = 4 \), \( \ell = e^{-3} + e^{0} = 1.050 \). Block 2: \( m' = 5 \), \( \ell' = 1.050\,e^{-1} + (e^{-3} + e^{-3} + e^{0}) = 0.386 + 1.100 = 1.486 \). One shot: \( e^{-4} + e^{-1} + e^{-3} + e^{-3} + e^{0} = 0.018 + 0.368 + 0.050 + 0.050 + 1 = 1.486 \). ✓</p>
 </details>
 </div>
 
-<h2>12.2 Quantization: fewer bits per weight</h2>
-<p>Storing weights in \( b \) bits instead of 16 shrinks the weight budget proportionally &mdash; and, by Chapter 10's ceiling, <em>speeds up memory-bound decoding by the same factor</em>. That second consequence surprises people, so it is worth stating plainly: on a decode workload, quantization is a speedup, because the ceiling is bandwidth divided by bytes read.</p>
-<p>The cost is precision. A uniform quantizer covering \( [-R, R] \) with \( b \) bits has step size \( \Delta = 2R/2^{b} \), and the resulting error, modeled as uniform over one step, has variance</p>
-\[ \text{MSE} = \frac{\Delta^2}{12}. \]
+<h2>12.2 Speculative decoding</h2>
+<p>The second technique attacks the same waste from a different side. Decoding is memory-bound (Chapter 11), so the accelerator's arithmetic sits idle while weights stream past. Suppose a small, cheap <em>draft</em> model proposes the next \( k \) tokens; the large <em>target</em> model can then check all \( k \) in a <em>single</em> forward pass, because verifying several positions at once is a prefill-shaped, compute-bound operation &mdash; nearly free relative to \( k \) separate decode steps.</p>
+<p>The obvious objection is that the output would then be the draft's, not the target's. The answer is a rejection-sampling scheme that makes the final distribution <em>exactly</em> the target's.</p>
+
+<p>The obvious objection comes first, and you should feel its force before seeing it dissolved. If a small, weaker model is proposing the words, surely the output is contaminated by that weaker model &mdash; faster, perhaps, but subtly worse. It is an entirely reasonable worry. It is also, as the following shows, exactly wrong: the acceptance rule is constructed so that the weaker model's preferences cancel out of the final distribution completely.</p>
 
 <div class="box deriv">
-<span class="label">Derivation 12.1</span>
-<p class="title">The quantization error, and two sensitivities</p>
-<p>A value uniformly distributed on \( [-\Delta/2, \Delta/2] \) has variance \( \frac{1}{\Delta}\int_{-\Delta/2}^{\Delta/2} x^2\,dx = \frac{\Delta^2}{12} \). Two consequences follow immediately from \( \Delta = 2R/2^b \):</p>
-<p><strong>Each extra bit quarters the error.</strong> Doubling \( b \) by one halves \( \Delta \), and the error goes as \( \Delta^2 \).</p>
-<p><strong>The error grows as the square of the range.</strong> If a few outlier weights force \( R \) from 1 to 4, the step quadruples and the MSE grows sixteenfold &mdash; at unchanged bit width. This is precisely why a handful of outlier channels wreck naive low-bit quantization, and why practical methods handle those channels separately.</p>
+<span class="label">Derivation 12.2</span>
+<p class="title">Exactness by rejection sampling</p>
+<p>Let the target assign probability \( p(x) \) to token \( x \) and the draft assign \( q(x) \). Sample \( x \sim q \) and accept it with probability \( \min\bigl(1, p(x)/q(x)\bigr) \). If rejected, sample instead from the normalized residual \( \operatorname{norm}\bigl(\max(0,\ p - q)\bigr) \).</p>
+<p>Then the probability of emitting \( x \) is the accepted mass plus the resampled mass. The accepted mass is \( q(x)\min(1, p/q) = \min(q(x), p(x)) \). Summed over all tokens, the total accepted probability is \( \sum_x \min(p,q) \), so rejection occurs with probability \( 1 - \sum_x \min(p,q) = \sum_x \max(0, p-q) \). The residual distribution places mass \( \max(0, p(x)-q(x)) / \sum_x \max(0,p-q) \) on \( x \). Multiplying and adding:</p>
+\[ \min(p,q) + \max(0, p-q) = p(x). \]
+<p>The emitted distribution is exactly the target's. Speculation changes speed, never samples.</p>
 </div>
 
-<p>Which weights deserve the bits is itself the question Chapter 9 answered in principle: precision costs, so spend it where it buys accuracy. Modern quantization methods are, in this light, allocation schemes over a bit budget &mdash; the Hinton&ndash;van Camp argument with an engineering budget attached.</p>
+<p>How much speed? If each drafted token is accepted independently with rate \( \alpha \), a verification cycle keeps the accepted run plus one token the target supplies regardless.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 12.3</span>
+<p class="title">Expected tokens per cycle</p>
+<p>The run of accepted tokens has length \( i \) with probability \( \alpha^i(1-\alpha) \) for \( i < k \), and length \( k \) with probability \( \alpha^k \); each case yields \( i+1 \) tokens. Summing the truncated geometric series,</p>
+\[ \mathbb{E}[\text{tokens per cycle}] = \frac{1 - \alpha^{\,k+1}}{1 - \alpha}. \]
+<p>If the draft costs \( c \) target-forwards per token, a cycle costs \( kc + 1 \) target-forwards. The speedup is the ratio.</p>
+</div>
+
+<div class="box worked">
+<span class="label">Worked Example 12.2</span>
+<p class="title">The economics, end to end</p>
+<p>Take \( \alpha = 0.8 \), \( k = 4 \), \( c = 0.1 \). Tokens per cycle: \( (1 - 0.8^5)/0.2 = (1-0.328)/0.2 = 3.36 \). Cycle cost: \( 4(0.1) + 1 = 1.4 \) target-forwards. Speedup: \( 3.36/1.4 = \) <span class="keynum">2.4&times;</span> &mdash; with provably identical output.</p>
+<p>Sensitivity matters more than the headline. At \( \alpha = 0.5 \) the same configuration gives \( (1 - 0.5^5)/0.5 = 1.94 \) tokens per 1.4 forwards, a mere \( 1.38\times \). The draft's <em>agreement</em> with the target is everything; its standalone quality matters only through \( \alpha \).</p>
+</div>
 
 <div class="drill">
 <span class="label">Drill 12.2</span>
-<p>(a) How many bits keep the MSE at or below \( 10^{-4} \) over the range \( [-1,1] \)? (b) A 70B model at 16, 8, and 4 bits: give the weight memory and the batch-1 decode ceiling on the reference machine.</p>
+<p>(a) The draft assigns \( q(A) = 0.5 \), the target \( p(A) = 0.3 \). What is the acceptance probability for A? (b) With \( \alpha = 0.7, k = 3, c = 0.15 \), what is the speedup?</p>
 <details><summary>Show answers</summary>
-<p>(a) \( \Delta \le \sqrt{12\times10^{-4}} = 0.0346 \); \( 2/2^b \le 0.0346 \Rightarrow 2^b \ge 57.7 \Rightarrow b = 6 \). (b) 140 / 70 / 35 GB; ceilings \( 2000/140 = 14.3 \), \( 28.6 \), \( 57 \) tokens/s.</p>
+<p>(a) \( \min(1, 0.3/0.5) = 0.6 \). (b) Tokens \( = (1 - 0.7^4)/0.3 = (1-0.2401)/0.3 = 2.53 \); cost \( = 3(0.15)+1 = 1.45 \); speedup \( = 1.75\times \).</p>
 </details>
 </div>
 
-<h2>12.3 Low-rank adaptation: training a thin slice</h2>
-<p>The third technique changes what is <em>trainable</em>. Freeze a weight matrix \( W \in \mathbb{R}^{d\times d} \) and learn only a low-rank update \( \Delta W = BA \), with \( B \in \mathbb{R}^{d\times r} \) and \( A \in \mathbb{R}^{r\times d} \) for a small rank \( r \). The trainable parameter count falls from \( d^2 \) to \( 2rd \).</p>
+<p>Choosing \( k \) is a marginal calculation: extending the draft by one more token adds an expected \( \alpha^{k+1} \) tokens and costs \( c \) more. When those balance, you are at the optimum &mdash; and because the curve is flat near it, a range of \( k \) performs about equally.</p>
 
-<div class="box worked">
-<span class="label">Worked Example 12.3</span>
-<p class="title">Which budget this actually attacks</p>
-<p>For \( d = 4096 \) and \( r = 16 \): trainable parameters \( 2 \times 16 \times 4096 = 131{,}072 \) against \( d^2 = 16.78 \) M &mdash; <span class="keynum">0.78%</span> of the matrix.</p>
-<p>Now the point. Optimizer state (roughly 16 bytes per parameter, Chapter 7) is paid only on <em>trainable</em> parameters. Fine-tuning a 7-billion-parameter model in full would demand about 112 GB of optimizer state; adapting roughly one percent of it demands about <span class="keynum">1.1 GB</span>. That is why such fine-tuning fits on a single accelerator &mdash; and it has essentially nothing to do with arithmetic, since the forward and backward passes still traverse the full frozen model.</p>
-</div>
-
-<div class="box trap">
-<span class="label">Trap &middot; T9 &middot; name your budget</span>
-<p>Three near-universal misstatements. Quantization does not slow decoding down by adding work &mdash; it speeds it up, because decode is bandwidth-bound. Low-rank adaptation does not make training arithmetic cheaper &mdash; it makes optimizer memory cheaper, which then buys larger batches or smaller hardware. And a mixture-of-experts with the same <em>active</em> parameters as a dense model has the same compute but far greater memory. In each case the claim is only meaningful once you name the budget.</p>
-</div>
-
-<div class="drill">
-<span class="label">Drill 12.3</span>
-<p>At \( d = 8192 \), adapting all four attention projection matrices at rank \( r = 8 \): give the total trainable parameters and the percentage of the \( 4d^2 \) attention weights.</p>
-<details><summary>Show answer</summary>
-<p>\( 4 \times 2 \times 8 \times 8192 = 524{,}288 \). Attention weights \( 4d^2 = 268.4 \) M. Fraction \( = 0.20\% \).</p>
-</details>
-</div>
-
-<h2>12.4 What the chapter bought</h2>
-<p>Each technique here saves something real, and no two of them save the same thing. Mixture-of-experts decouples capacity from per-token compute, at the price of resident memory and a routing problem whose failure mode is silently dropped tokens. Quantization shrinks weights, and because decode is bandwidth-bound it buys speed directly &mdash; with an error that quarters per bit and grows as the square of the range. Low-rank adaptation shrinks optimizer state by two orders of magnitude, which is what made fine-tuning broadly accessible. Chapter 13 uses that accessibility: it is the chapter where a pretrained model is taught what kind of answer is wanted, and it contains the last of the book's three protocol derivations.</p>
+<h2>12.3 What the chapter bought</h2>
+<p>Both techniques in this chapter trade an abundant resource for a scarce one, and both are exact &mdash; a combination worth pausing on, since it is rarer than it sounds. Streaming softmax lets attention be computed in tiles, cutting memory traffic by an order of magnitude while doing slightly more arithmetic and recomputation. Speculative decoding converts \( k \) memory-bound passes into one compute-bound verification, with a rejection rule that provably preserves the target distribution. Both illustrate the discipline this book keeps returning to: identify the binding budget, then spend freely from the other. Chapter 13 continues in the same vein but changes the object &mdash; instead of computing the same model more cleverly, it makes the model itself sparser and cheaper.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A layer has 16 experts of 100 M each plus 40 M shared, top-2 routed, over 24 layers. Give total and active parameters.</li>
-<li>Router fractions \( f = (0.9, 0.1) \), mean probabilities \( P = (0.8, 0.2) \). Give the auxiliary loss.</li>
-<li>4096 tokens, 16 experts, capacity factor 1.0, and expert 7 receives 320 tokens. How many are dropped?</li>
-<li>At \( d = 2048 \), \( r = 32 \): give the trainable parameter count and its fraction of \( d^2 \).</li>
+<li>At \( n = 8192 \), half precision: give one head's score-matrix size and its ratio to 20 MB of on-chip memory.</li>
+<li>Run the streaming softmax on blocks \( \{0, 2\} \) then \( \{1\} \), and verify against the one-shot sum.</li>
+<li>With \( \alpha = 0.9, k = 5 \), give the expected tokens per cycle.</li>
+<li>State, in one sentence each, what streaming softmax and speculative decoding change and what they leave exactly unchanged.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>Reading a sparse model honestly.</strong> A mixture-of-experts model is advertised at 140 B parameters; it has 64 experts with top-2 routing and 20% of its parameters in shared components. Estimate its active parameter count. Then state which of the following behave like the total and which like the active figure: training FLOPs, serving memory, decode arithmetic, KV cache size.</li>
-<li><strong>Outliers and bits.</strong> A weight matrix normally spans \( [-1,1] \) and is quantized to 8 bits. A handful of outliers extend the range to \( [-6,6] \). Give the MSE before and after, the factor of degradation, and the number of additional bits needed to restore the original error. Explain why handling outliers separately is cheaper than adding bits everywhere.</li>
-<li><strong>Budgets, side by side.</strong> For a 13-billion-parameter model, estimate (a) weight memory at half precision, (b) optimizer state under full fine-tuning at 16 bytes per parameter, and (c) optimizer state under rank-16 adaptation of matrices totalling 30% of the model. Present the three numbers and state which technique you would apply to fit training on a 80 GB accelerator.</li>
+<li><strong>Traffic accounting.</strong> For standard attention at \( n = 4096 \), \( d = 128 \), half precision, compare the score-matrix traffic (written once and read once) against the unavoidable traffic for queries, keys, values, and output. Give the ratio and comment on how it scales with \( n \) and \( d \).</li>
+<li><strong>Proving exactness.</strong> Carry out Derivation 12.2 for a two-symbol alphabet with explicit numbers: \( p = (0.3, 0.7) \), \( q = (0.5, 0.5) \). Compute the acceptance probabilities, the rejection probability, the residual distribution, and verify that the emitted distribution equals \( p \) exactly.</li>
+<li><strong>Choosing the draft length.</strong> With \( \alpha = 0.8 \) and \( c = 0.1 \), compute the speedup at \( k = 2, 4, 8, 16 \). Identify where the optimum lies, and show that the marginal condition \( \alpha^{k+1} \approx c \) predicts it.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>The balance loss, minimized.</strong> Show for \( E = 2 \) that \( \mathcal{L}_{\text{aux}} = E\sum_i f_i P_i \) attains its minimum value of 1 when routing is uniform, by substituting \( f_1 = P_1 = x \), \( f_2 = P_2 = 1-x \) and minimizing over \( x \). Then explain in a paragraph why an auxiliary <em>pressure</em> plus a hard capacity limit is the standard design, rather than either mechanism alone &mdash; and what failure mode each one alone would permit.</li>
+<li><strong>Why decode and not prefill.</strong> Explain, using Chapter 11's arithmetic-intensity argument, why speculative decoding accelerates generation but offers essentially nothing for prompt processing. Then propose what property a workload must have for speculation to help it, stated in terms of intensity and the ridge point, and give one non-language example that would qualify.</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 12 &middot; Pass before Chapter 13</span>
-<p>Reproduce the active-versus-total accounting, Derivation 12.1 (the \( \Delta^2/12 \) error with both sensitivities), and the \( 2rd \) count with its budget argument, on blank paper. Attempt B-1 and B-3 closed book. You pass when, for any efficiency claim, you name its budget before evaluating it.</p>
+<p>Reproduce Derivation 12.1 (streaming softmax, including the value accumulator's rescaling), Derivation 12.2 (the exactness proof), and Derivation 12.3 (expected tokens per cycle) on blank paper. Verify a streaming example numerically by hand. Attempt B-2 and B-3 closed book. You pass when you can state, without hedging, that both techniques are exact and explain why.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 12</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/2101.03961">Fedus, Zoph &amp; Shazeer, <em>Switch Transformers</em> (2021)</a><span class="how">Section 2 and the auxiliary-loss box; the capacity-factor discussion is Worked Example 12.2's source.</span></li>
-<li><a href="https://arxiv.org/abs/2401.04088">Jiang et al., <em>Mixtral of Experts</em> (2024)</a><span class="how">Read the parameter table against Worked Example 12.1 and check you can predict both numbers.</span></li>
-<li><a href="https://arxiv.org/abs/2208.07339">Dettmers et al., <em>LLM.int8()</em> (2022)</a><span class="how">The outlier story of Derivation 12.1's second sensitivity, discovered empirically.</span></li>
-<li><a href="https://arxiv.org/abs/2106.09685">Hu et al., <em>LoRA</em> (2021)</a> and <a href="https://arxiv.org/abs/2305.14314">Dettmers et al., <em>QLoRA</em> (2023)</a><span class="how">Section 4 of the first; the memory table of the second. Note which budget each paper's headline number refers to.</span></li>
-<li><a href="https://arxiv.org/abs/2210.17323">Frantar et al., <em>GPTQ</em> (2022)</a> and <a href="https://arxiv.org/abs/2306.00978">Lin et al., <em>AWQ</em> (2023)</a><span class="how">Abstracts suffice. Read both as bit-allocation schemes and map them onto Chapter 9's precision-costs-bits argument.</span></li>
+<li><a href="https://arxiv.org/abs/1805.02867">Milakov &amp; Gimelshein, <em>Online Normalizer Calculation for Softmax</em> (2018)</a><span class="how">Three pages, read fully. Derivation 12.1 in its original form.</span></li>
+<li><a href="https://arxiv.org/abs/2205.14135">Dao et al., <em>FlashAttention</em> (2022)</a><span class="how">Sections 1&ndash;3 and Figure 1. The IO analysis is Worked Example 12.1 made rigorous.</span></li>
+<li><a href="https://arxiv.org/abs/2307.08691">Dao, <em>FlashAttention-2</em> (2023)</a><span class="how">The work-partitioning section, skimmed. Nothing mathematical changed from the first paper; a good lesson in where real speedups come from once the algorithm is settled.</span></li>
+<li><a href="https://arxiv.org/abs/2211.17192">Leviathan, Kalman &amp; Matias, <em>Fast Inference from Transformers via Speculative Decoding</em> (2023)</a><span class="how">Section 2 contains the one-page proof of Derivation 12.2; compare it to yours.</span></li>
+<li><a href="https://arxiv.org/abs/2302.01318">Chen et al., <em>Accelerating Large Language Model Decoding with Speculative Sampling</em> (2023)</a><span class="how">Its algorithm box, for the same rejection rule as Derivation 12.2 presented differently. Useful for seeing that two independent derivations produce the identical acceptance test.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 12 &middot; Sparsity and Thrift</span>
-  <span><a href="chapter-13.html">Next: Teaching Preferences &rarr;</a></span>
+  <span>Chapter 12 &middot; Bytes over FLOPs</span>
+  <span><a href="chapter-13.html">Next: Sparsity and Thrift &rarr;</a></span>
 </footer>
 
 </div>

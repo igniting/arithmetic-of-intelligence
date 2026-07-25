@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 16 · The Whole Lifecycle — The Arithmetic of Intelligence</title>
+<title>Chapter 16 · Generation by Denoising — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,123 +17,137 @@
 
 <div class="chrome"><div class="chrome-in">
   <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
-  <div class="nav"><a href="chapter-15.html">&larr; Chapter 15</a><a href="appendix-a.html">Appendix A &rarr;</a></div>
+  <div class="nav"><a href="chapter-15.html">&larr; Chapter 15</a><a href="chapter-17.html">Chapter 17 &rarr;</a></div>
 </div></div>
 
 <div class="page">
 
 <header class="opener">
   <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 16</span>
-  <h1 class="ch">The Whole Lifecycle</h1>
-  <p class="ch-blurb">Chapter 6 minimized the cost of building a model. A deployed model also costs something every time it answers &mdash; and once that is in the objective, the optimal model changes.</p>
+  <h1 class="ch">Generation by Denoising</h1>
+  <p class="ch-blurb">Destroy an image gradually with noise until nothing remains, then train a network to undo one step of the destruction. Run it backward and you have a generator &mdash; and the whole construction rests on the fact that Gaussians compose.</p>
 </header>
 
-<p class="lead">We opened, in Chapter 6, by minimizing what it costs to build a model. That was only half the bill. A deployed model charges you again every time it answers, for as long as it is in service &mdash; and once that second charge is in the objective, the model you should have built is not the one Chapter 6 told you to build.</p>
+<p class="lead">Take a photograph and add a little noise. Add a little more. Keep going until nothing is left but static. Now train a network to undo one step of that, and run it backwards from pure noise. What comes out is a photograph that never existed. It is a strange way to build a generator, and the reason it is tractable at all is a fact about Gaussians you met in Chapter 1.</p>
 
-<h2>16.1 The objective with serving in it</h2>
-<p>Training a model of \( N \) parameters on \( D \) tokens costs about \( 6ND \) operations (Chapter 6). Serving it costs about \( 2N \) operations per generated token &mdash; one multiply&ndash;add per parameter, forward only. Over a deployment lifetime of \( T \) tokens, total cost is</p>
-\[ C_{\text{total}} = \underbrace{6 N D_{\text{train}}}_{\text{build}} + \underbrace{2 N T}_{\text{serve}}. \]
-<p>Look at the second term before going further, because everything in this chapter follows from its shape. It is proportional to \( N \) alone. So if two models reach the <em>same quality</em> by different routes &mdash; one large and briefly trained, one smaller and trained far longer &mdash; the smaller one is cheaper to serve forever, and as \( T \) grows that advantage eventually dominates whatever extra it cost to build.</p>
+<h2>16.1 The forward process collapses</h2>
+<p>The corruption is defined one step at a time: blend the current image with fresh Gaussian noise,</p>
+\[ x_t = \sqrt{1-\beta_t}\,x_{t-1} + \sqrt{\beta_t}\,\epsilon, \qquad \epsilon \sim \mathcal{N}(0, I), \]
+<p>with a small schedule \( \beta_t \). Applied a thousand times, this leaves pure noise. Simulating a thousand steps to produce a training example would be intolerable &mdash; but we do not have to, because a chain of Gaussian blends is itself a single Gaussian blend.</p>
 
-<div class="box worked">
-<span class="label">Worked Example 16.1</span>
-<p class="title">The smaller model wins the long run</p>
-<p>Take two options of equal quality (this equivalence is <em>given</em>; establishing it empirically is the hard part).</p>
-<p><strong>Option A:</strong> \( N = 70 \) B, \( D = 1.4 \) T. <strong>Option B:</strong> \( N = 35 \) B, \( D = 4.2 \) T.</p>
-<p>At a lifetime of \( T = 10^{13} \) tokens:</p>
-<p>\( C_A = 6(7{\times}10^{10})(1.4{\times}10^{12}) + 2(7{\times}10^{10})(10^{13}) = 5.88{\times}10^{23} + 1.40{\times}10^{24} = \) <span class="keynum">1.99&times;10<sup>24</sup></span>.</p>
-<p>\( C_B = 6(3.5{\times}10^{10})(4.2{\times}10^{12}) + 2(3.5{\times}10^{10})(10^{13}) = 8.82{\times}10^{23} + 7.00{\times}10^{23} = \) <span class="keynum">1.58&times;10<sup>24</sup></span>.</p>
-<p>Option B costs 50% more to <em>train</em> and still wins the lifetime by about 20% &mdash; and every serving number from Chapter 10 (cache size, decode ceiling, memory footprint) improves at 35 B as well. The compute-optimal recipe of Chapter 6 was answering a different question than the one a deploying organization actually faces.</p>
-</div>
+<p>There is a practical problem to notice before the mathematics. Training requires showing the network images corrupted to every possible degree. If reaching corruption level eight hundred meant actually running eight hundred steps of noising for every training example, the method would be far too slow to use. So the question that has to be answered first is whether we can jump straight to any level in one operation. The answer is yes, and the reason is a fact about Gaussians you already know.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 16.1</span>
-<p class="title">The break-even lifetime</p>
-<p>Two iso-quality options tie when their total costs are equal:</p>
-\[ 6(ND)_A + 2N_A T = 6(ND)_B + 2N_B T \ \Longrightarrow\ T^* = \frac{6\bigl[(ND)_A - (ND)_B\bigr]}{2\,(N_B - N_A)}. \]
-<p>For the example above: \( (ND)_A = 9.8\times10^{22} \), \( (ND)_B = 1.47\times10^{23} \), so the numerator is \( 6(-4.9\times10^{22}) \); with \( N_B - N_A = -3.5\times10^{10} \), we get \( T^* = \frac{2.94\times10^{23}}{7.0\times10^{10}} = \) <span class="keynum">4.2&times;10<sup>12</sup></span> tokens. Below that lifetime the larger model is cheaper overall; above it, the smaller one. <em>The right model to train is a function of expected demand.</em></p>
+<p class="title">A thousand steps in one jump</p>
+<p>Take two steps with constants \( \beta_1, \beta_2 \), and write \( \alpha_t = 1-\beta_t \). Then \( x_1 = \sqrt{\alpha_1}x_0 + \sqrt{1-\alpha_1}\,\epsilon_1 \) and</p>
+\[ x_2 = \sqrt{\alpha_2}\,x_1 + \sqrt{1-\alpha_2}\,\epsilon_2 = \sqrt{\alpha_2\alpha_1}\,x_0 + \sqrt{\alpha_2(1-\alpha_1)}\,\epsilon_1 + \sqrt{1-\alpha_2}\,\epsilon_2. \]
+<p>The two noise terms are independent Gaussians, so &mdash; variances add &mdash; their sum is a single Gaussian of variance \( \alpha_2(1-\alpha_1) + (1-\alpha_2) = 1 - \alpha_1\alpha_2 \). Hence \( x_2 = \sqrt{\bar\alpha_2}\,x_0 + \sqrt{1-\bar\alpha_2}\,\epsilon \) with \( \bar\alpha_2 = \alpha_1\alpha_2 \). By induction,</p>
+\[ q(x_t \mid x_0) = \mathcal{N}\bigl(\sqrt{\bar\alpha_t}\,x_0,\ (1-\bar\alpha_t)I\bigr), \qquad \bar\alpha_t = \prod_{s \le t}(1-\beta_s). \]
+<p>Any noise level is reachable in one draw. Note the coefficients: \( \sqrt{\bar\alpha} \) multiplies the signal and \( \sqrt{1-\bar\alpha} \) the noise, so their variances sum to 1 &mdash; the check that catches nearly every algebra slip here.</p>
 </div>
 
-<h2>16.2 But the optimum is interior</h2>
-<p>If smaller-and-longer-trained is better, why not push it arbitrarily far? Because iso-quality has diminishing returns: matching a given quality with an ever-smaller model demands disproportionately more data, and the training term eventually overwhelms the serving saving.</p>
+<p>The quantity that gives the schedule meaning is the signal-to-noise ratio, \( \mathrm{SNR}(t) = \bar\alpha_t/(1-\bar\alpha_t) \), which slides from very large to nearly zero. Training samples a random \( t \), corrupts a real image to that level, and asks the network to predict the noise that was added. The network thus learns to denoise at every level at once &mdash; a curriculum in a single objective.</p>
 
 <div class="box worked">
-<span class="label">Worked Example 16.2</span>
-<p class="title">Pushing too far</p>
-<p>Add <strong>Option C:</strong> \( N = 20 \) B, \( D = 12 \) T, also of equal quality. At \( T = 10^{13} \):</p>
-<p>\( C_C = 6(2{\times}10^{10})(1.2{\times}10^{13}) + 2(2{\times}10^{10})(10^{13}) = 1.44{\times}10^{24} + 4.00{\times}10^{23} = \) <span class="keynum">1.84&times;10<sup>24</sup></span>.</p>
-<p>Worse than Option B's \( 1.58\times10^{24} \), though still better than A. The optimum lies <em>between</em> A and C &mdash; an interior point, not a corner. This is why the answer is a calculation rather than a slogan: &ldquo;train smaller models longer&rdquo; is directionally right and quantitatively unbounded, and only the arithmetic locates the stopping point.</p>
+<span class="label">Worked Example 16.1</span>
+<p class="title">Reading a schedule</p>
+<p>Take a constant \( \beta = 0.02 \), so \( \bar\alpha_t = 0.98^t \). The half-signal point, where \( \mathrm{SNR} = 1 \), is where \( 0.98^t = 0.5 \): \( t = \ln 0.5/\ln 0.98 = 0.693/0.0202 = \) <span class="keynum">34</span>. By \( t = 100 \), \( \bar\alpha = 0.98^{100} = e^{-2.02} = 0.133 \) and the SNR is \( 0.133/0.867 = 0.15 \) &mdash; structure nearly gone.</p>
+<p>Observe that this is arithmetically the same computation as Chapter 9's emergence frontier \( p^k = \tfrac12 \). Different subject, identical reflex.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 16.1</span>
-<p>At a lifetime of only \( T = 10^{11} \) tokens, recompute the totals for Options A and B above and say which wins.</p>
-<details><summary>Show answer</summary>
-<p>\( C_A = 5.88{\times}10^{23} + 2(7{\times}10^{10})(10^{11}) = 5.88{\times}10^{23} + 1.4{\times}10^{22} = 6.02{\times}10^{23} \). \( C_B = 8.82{\times}10^{23} + 7{\times}10^{21} = 8.89{\times}10^{23} \). <strong>A wins</strong> &mdash; below the break-even lifetime, the cheaper-to-train model is correct.</p>
+<p>(a) With \( \beta = 0.01 \), at what step does \( \mathrm{SNR} = 1 \)? (b) If \( \bar\alpha = 0.36 \), write \( x_t \) explicitly in terms of \( x_0 \) and \( \epsilon \).</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 0.99^t = 0.5 \Rightarrow t = 0.693/0.01005 = 69 \). (b) \( x_t = 0.6\,x_0 + 0.8\,\epsilon \), since \( \sqrt{0.36} = 0.6 \) and \( \sqrt{0.64} = 0.8 \); note \( 0.36 + 0.64 = 1 \). ✓</p>
 </details>
 </div>
 
-<h2>16.3 Distillation</h2>
-<p>A second lever changes the iso-quality menu itself. Train a large, expensive teacher once; then train a small student to imitate not just the teacher's answers but its full output distribution. The soft distribution carries more information per example than a hard label &mdash; a statement Chapter 9 lets us make precisely, since a distribution over outcomes specifies more bits than a single outcome does. The student reaches a quality its own size and data would not otherwise buy, and it is the student that gets served.</p>
-<p>The modern refinement grades the <em>student's own</em> samples rather than only imitating the teacher's, which connects this chapter directly to Chapters 13 and 14: the teacher (or a verifier) supplies the reward signal, and the student improves on the distribution it actually produces.</p>
+<h2>16.2 Sampling, and how to shorten it</h2>
+<p>Generation reverses the ladder: start from noise and repeatedly remove the network's predicted noise. One reverse step is</p>
+\[ x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\,\epsilon_\theta(x_t, t)\right) + \sigma_t z, \qquad z \sim \mathcal{N}(0, I), \]
+<p>where \( \epsilon_\theta \) is the network's estimate of the noise in \( x_t \) and \( \sigma_t \) sets how much fresh noise is injected on the way back down. This update is <strong>given</strong>: deriving it requires the variational argument this chapter's readings set aside, and nothing below depends on where it came from. What matters is its shape &mdash; one network evaluation per step, and a step index that must walk down the ladder it walked up.</p>
+<p>That shape is the cost. Run it as written and generating one image takes as many network evaluations as the forward process had steps, often a thousand. Setting \( \sigma_t = 0 \) makes the reverse process deterministic, and a deterministic trajectory can be sampled at a subset of its steps: take every twentieth \( t \) instead of every \( t \), and the same schedule needs fifty evaluations rather than a thousand.</p>
+<p>Now price it, because the arithmetic here is the whole practical story and it is one line. Cost is proportional to the number of network evaluations \( n_{\text{eval}} \), so a stride \( k \) over a \( T \)-step schedule costs</p>
+\[ n_{\text{eval}} = \left\lceil \frac{T}{k} \right\rceil, \]
+<p>and the saving is the factor \( k \), exactly and with nothing hidden in it. At \( T = 1000 \) and \( k = 20 \) that is fifty evaluations against a thousand, a twentyfold reduction in the cost of every image the model ever generates. Quality degrades as \( k \) grows, gently at first and then not, and where that knee sits is measured rather than derived &mdash; the readings give the table.</p>
 
-<h2>16.4 The four budgets</h2>
-<p>The book has priced four distinct scarce resources, and naming them is the last piece of vocabulary to carry away.</p>
-<ul>
-<li><strong>Training operations</strong> &mdash; Chapter 6's \( 6ND \), minimized subject to a budget.</li>
-<li><strong>Serving operations</strong> &mdash; this chapter's \( 2NT \), proportional to size and demand.</li>
-<li><strong>Memory bytes and bandwidth</strong> &mdash; Chapters 10 through 12: caches, weight reads, optimizer state, and the roofline that says which of them binds.</li>
-<li><strong>Human preference information</strong> &mdash; Chapter 13's comparisons, the scarcest and least substitutable of the four, since no amount of compute manufactures a judgment about what a good answer is.</li>
-</ul>
-<p>Nearly every technique in Part III is an arbitrage between two of these: spend an abundant budget to relieve a binding one. Streaming softmax spends arithmetic to save bandwidth. Speculation spends draft compute to save weight reads. Quantization spends precision to save bytes. Low-rank adaptation spends expressiveness to save optimizer state. Mixture-of-experts spends memory to save per-token compute. Distillation spends a large training run once to save serving forever. Once you see the four budgets, the field's papers stop being a list of tricks and become a small set of trades.</p>
+<h2>16.3 Guidance is extrapolation</h2>
+<p>To make generation follow a condition &mdash; a text prompt, say &mdash; the model is trained both with the condition and, some fraction of the time, without it. At sampling time the two predictions are combined:</p>
+\[ \tilde\epsilon = \epsilon_u + w\,(\epsilon_c - \epsilon_u), \]
+<p>where \( \epsilon_u \) is the unconditional prediction and \( \epsilon_c \) the conditional. At \( w = 0 \) this is unconditional; at \( w = 1 \) it is exactly the conditional prediction. At \( w > 1 \) &mdash; the usual setting &mdash; it goes <em>past</em> the conditional prediction, in the direction that distinguishes conditional from unconditional.</p>
 
-<h2>16.5 What the book bought</h2>
-<p>You began with six mathematical reflexes and have ended able to derive, from nothing: why deep networks were hard to train and what fixed it; why residual connections work, three separate ways; how memory decays in a recurrence and what pins it; why attention scales its scores and what it costs; how to allocate a compute budget optimally, and what a halving of loss really costs; what pipelining and sharding cost; how a benchmark can lie by threshold or by leakage; why compression is the master currency and Occam a theorem; why serving is a memory problem; how two exact techniques buy speed for free; what sparsity and quantization and adaptation each save; how a reinforcement-learning pipeline collapsed into a supervised loss; what sampling more answers can and cannot achieve; how noise-reversal generates images; and how the whole lifecycle changes what you should have built.</p>
-<p>None of it required memorizing a benchmark score or a date. The thirty-eight derivations of Appendix A are the entire syllabus, and the trap taxonomy of Appendix B names the ways they are misapplied. The real examination is not the mock paper. It is next quarter's arXiv posting: read a page, name the budget it arbitrages, and identify the derivation that prices it. If you can do that, the program worked &mdash; and unlike any particular result in this book, that skill does not expire.</p>
+<div class="box worked">
+<span class="label">Worked Example 16.2</span>
+<p class="title">Outside the interval</p>
+<p>Let \( \epsilon_u = 0.20 \), \( \epsilon_c = 0.30 \), \( w = 7.5 \). Then \( \tilde\epsilon = 0.20 + 7.5(0.10) = \) <span class="keynum">0.95</span> &mdash; far outside \( [0.20, 0.30] \). Guidance is extrapolation, not interpolation. That is both why it sharpens adherence to the prompt and why large \( w \) over-saturates and collapses diversity: you are pushing well beyond where either prediction was trained to be valid.</p>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T5 and T1</span>
+<p>Three recurring slips. Reading \( w \) as a mixing weight in \( [0,1] \) &mdash; it is not; values of 5 to 10 are routine. Confusing \( \alpha_t = 1-\beta_t \) with the cumulative \( \bar\alpha_t \) &mdash; the bar denotes the product over all steps so far. And placing the square roots wrongly: it is \( \sqrt{\bar\alpha} \) on the signal and \( \sqrt{1-\bar\alpha} \) on the noise, verifiable at a glance because the variances must sum to one.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 16.2</span>
+<p>With \( w = 3 \), \( \epsilon_u = 0.5 \), \( \epsilon_c = 0.4 \), compute \( \tilde\epsilon \) and note its direction relative to the two inputs.</p>
+<details><summary>Show answer</summary>
+<p>\( 0.5 + 3(0.4 - 0.5) = 0.5 - 0.3 = 0.2 \) &mdash; below both, because the conditional lies below the unconditional and guidance extrapolates in that direction.</p>
+</details>
+</div>
+
+<h2>16.4 Denoising in a compressed space</h2>
+<p>Running this process at full image resolution is wasteful, because most pixel-level detail is texture that a decoder can supply. The remedy is to compress the image into a much smaller latent representation, run the entire diffusion process there, and decode at the end. The saving is roughly the compression ratio in both computation and activation memory &mdash; often a factor of dozens.</p>
+<p>Structurally this is the same division of labour we saw in Chapter 4's bottleneck block and Chapter 13's expert routing: do the expensive work in the narrow space, and let cheap machinery handle the wide one. It is worth recognizing the pattern, because it recurs whenever a field gets serious about cost.</p>
+
+<h2>16.5 What the chapter bought</h2>
+<p>The forward corruption collapses to a single Gaussian because variances add &mdash; making training tractable at any noise level in one draw. The signal-to-noise ratio gives the schedule its meaning, and its half-signal point is a logarithm. Sampling can be strided, turning a thousand evaluations into fifty. Guidance extrapolates beyond the conditional prediction, buying adherence at the cost of diversity. And running the whole process in a compressed latent space is the same narrow-middle economy that recurs throughout this book. One chapter remains: what all of this costs over a model's entire life, and how that changes what model you should have trained in the first place.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A 40 B model serves \( 5\times10^{12} \) tokens. Give the serving cost in operations.</li>
-<li>The same model was trained on 2 T tokens. Give the training cost, and the ratio of serving to training.</li>
-<li>State the break-even formula for two iso-quality options.</li>
-<li>Name the four budgets and give one technique that relieves each.</li>
+<li>With \( \beta = 0.005 \), find the step at which \( \mathrm{SNR} = 1 \).</li>
+<li>At \( \bar\alpha = 0.81 \), write the coefficients on \( x_0 \) and \( \epsilon \), and verify they are consistent.</li>
+<li>Compute \( \tilde\epsilon \) for \( w = 5 \), \( \epsilon_u = 0.1 \), \( \epsilon_c = 0.25 \).</li>
+<li>A 1000-step schedule is strided by 25. How many network evaluations does sampling take?</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>A deployment decision.</strong> Two iso-quality options: P has \( N = 100 \) B, \( D = 2 \) T; Q has \( N = 40 \) B, \( D = 6 \) T. Compute total lifetime cost at \( T = 10^{12} \) and \( T = 10^{14} \), find the break-even lifetime, and recommend one, stating your assumption about demand.</li>
-<li><strong>Where the interior optimum sits.</strong> Given iso-quality options at \( (N, D) \) of (80 B, 1 T), (40 B, 3 T), (20 B, 10 T), and (10 B, 40 T), compute lifetime cost at \( T = 5\times10^{12} \) for each and identify the best. Explain why both extremes lose.</li>
-<li><strong>Serving beyond FLOPs.</strong> Worked Example 16.1 counts only operations. Using Chapter 10, list three further ways the 35 B option beats the 70 B option in production, quantifying at least one of them. Then state why an operations-only account understates the case for the smaller model.</li>
+<li><strong>Composing two steps.</strong> Carry out Derivation 16.1 in full for two steps with distinct \( \beta_1 = 0.01 \) and \( \beta_2 = 0.03 \): give \( \bar\alpha_2 \), the coefficients on \( x_0 \) and on the combined noise, and verify the variances sum to one. Then state the induction step for general \( t \).</li>
+<li><strong>Designing a schedule.</strong> You want \( \mathrm{SNR} = 1 \) to occur at step 200 under a constant \( \beta \). Find \( \beta \). Then compute \( \bar\alpha \) at step 500 under that schedule.</li>
+<li><strong>The cost of guidance.</strong> Classifier-free guidance requires both a conditional and an unconditional prediction at every sampling step. State the multiplier this puts on sampling cost, and combine it with a stride of 20 on a 1000-step schedule to give the total number of network evaluations. Compare against unguided, unstrided sampling.</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>The unified objective.</strong> Write an objective that, minimized, would jointly determine the model size, training tokens, and quantity of preference data for a deployment with known lifetime \( T \) and known per-unit costs of compute and human annotation. State what empirical inputs it needs that this book has treated as given, and identify which of them is hardest to obtain and why. (You are being asked to state honestly where derivation ends and measurement must begin &mdash; the most valuable judgment in the field.)</li>
+<li><strong>The narrow middle, three times.</strong> The bottleneck block of Chapter 4, the expert routing of Chapter 13, and the latent space of Section 16.4 all perform expensive computation in a compressed representation. For each, identify what is compressed, what does the compressing and decompressing, which budget is saved, and what is risked by compressing too aggressively. Then state the general design principle in one sentence.</li>
 </ol>
 </div>
 
 <div class="gate">
-<span class="label">Gate 16 &middot; The final gate</span>
-<p>Reproduce Derivation 16.1 and both worked examples on blank paper. Then sweep the entire Derivation Bank &mdash; all thirty-eight results, Chapters 2 through 16 &mdash; reproducing each from nothing over a few sittings. Finally, take the mixed examination described in Appendix D's preface under timed conditions. You pass the book, not merely the chapter, when the sweep is complete and the trap taxonomy in Appendix B contains no class you have not personally fallen into and logged.</p>
+<span class="label">Gate 16 &middot; Pass before Chapter 17</span>
+<p>Reproduce Derivation 16.1 &mdash; the two-step composition and the induction &mdash; on blank paper, and produce the SNR half-point calculation from nothing. Attempt B-1 and B-2 closed book. You pass when the coefficient placement is automatic and you check it every time by summing variances to one.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 16</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/2401.00448">Sardana &amp; Frankle, <em>Beyond Chinchilla-Optimal: Accounting for Inference in Language Model Scaling Laws</em> (2024)</a><span class="how">This chapter's argument in full, with the empirical iso-quality curves that Worked Example 16.1 takes as given.</span></li>
-<li><a href="https://arxiv.org/abs/1503.02531">Hinton, Vinyals &amp; Dean, <em>Distilling the Knowledge in a Neural Network</em> (2015)</a><span class="how">Sections 1&ndash;2. Read the soft-target argument alongside Chapter 9's account of information in a distribution.</span></li>
-<li><a href="https://arxiv.org/abs/2203.15556">Hoffmann et al., <em>Chinchilla</em> (2022)</a><span class="how">Reread Section 5 now. The post-publication drift toward far higher token-per-parameter ratios reads as an obvious consequence once serving is in the objective.</span></li>
-<li><a href="https://arxiv.org/abs/2302.13971">Touvron et al., <em>LLaMA</em> (2023)</a><span class="how">An explicit statement of the deployment-cost reasoning of Section 16.1, made before the formal analysis existed.</span></li>
+<li><a href="https://arxiv.org/abs/2006.11239">Ho, Jain &amp; Abbeel, <em>Denoising Diffusion Probabilistic Models</em> (2020)</a><span class="how">Sections 2&ndash;3. Skip the variational bound on a first pass and take Derivation 16.1's closed form as your target.</span></li>
+<li><a href="https://arxiv.org/abs/2010.02502">Song, Meng &amp; Ermon, <em>Denoising Diffusion Implicit Models</em> (2020)</a><span class="how">The strided sampling of Section 16.2; read the quality-versus-steps table.</span></li>
+<li><a href="https://arxiv.org/abs/2207.12598">Ho &amp; Salimans, <em>Classifier-Free Diffusion Guidance</em> (2022)</a><span class="how">Four pages, read fully; Worked Example 16.2 is their equation with numbers attached.</span></li>
+<li><a href="https://arxiv.org/abs/2112.10752">Rombach et al., <em>High-Resolution Image Synthesis with Latent Diffusion Models</em> (2022)</a><span class="how">Section 3 for the compressed-space argument of Section 16.4.</span></li>
+<li><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/">Weng, <em>What Are Diffusion Models?</em></a><span class="how">Its DDPM section, read after the derivations, to place Derivation 16.1 among the variants that reparameterize the same forward process.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 16 &middot; The Whole Lifecycle &mdash; end of Part III</span>
-  <span><a href="appendix-a.html">Next: Appendix A &rarr;</a></span>
+  <span>Chapter 16 &middot; Generation by Denoising</span>
+  <span><a href="chapter-17.html">Next: The Whole Lifecycle &rarr;</a></span>
 </footer>
 
 </div>

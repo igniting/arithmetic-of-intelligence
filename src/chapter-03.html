@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chapter 3 · The Architecture of Depth — The Arithmetic of Intelligence</title>
+<title>Chapter 3 · The Geometry of Training — The Arithmetic of Intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,176 +24,151 @@
 
 <header class="opener">
   <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 3</span>
-  <h1 class="ch">The Architecture of Depth</h1>
-  <p class="ch-blurb">If optimization is so sensitive to the shape of the loss surface, perhaps we can build networks whose surfaces are easier to descend. That idea, made concrete, is the residual connection.</p>
+  <h1 class="ch">The Geometry of Training</h1>
+  <p class="ch-blurb">For two decades the obstacle to deep learning was not representation but optimization. The problem, and its cure, are a story about the shape of a valley.</p>
 </header>
 
-<p class="lead">Suppose you have a network that works at twenty layers and you want one that works at a hundred. You add eighty more layers of the same kind and train it the same way. It gets <em>worse</em> &mdash; and not on held-out data, where you might blame overfitting, but on the training set itself. Something about depth is defeating the optimizer. The fix, when it came, was a single addition sign.</p>
-<p>We begin with the humblest ingredient, the convolution, because its costs are pure counting and because those counts recur every time we compare two designs. Then we turn to the central innovation of the era, the residual connection, and find that its single line of algebra conceals three separate theorems. We close with dilation, a way to see far across an image without paying for the privilege.</p>
+<p class="lead">Picture a narrow valley with steep walls. You are standing on one slope, blindfolded, allowed only to feel which way the ground falls and step that way. You will bounce from wall to wall and creep along the floor. That, almost exactly, is what training a deep network looked like for twenty years, and understanding why requires nothing more than the shape of the valley.</p>
+<p>It is tempting to assume the difficulty is one of expressiveness &mdash; that among all possible settings of the weights, the rare good one is hard to find. For a long time the opposite was true. Good settings are plentiful. The trouble was that gradient descent, the only search procedure that scales, could not travel to them. It would take a step, overshoot in one direction, crawl in another, and stall. Naming that temptation is worth a sentence, because believing it sends you hunting for the wrong fix &mdash; more capacity, more regularization &mdash; when the problem was never capacity at all.</p>
 
-<h2>3.1 The arithmetic of convolution</h2>
-<p>A convolutional layer slides a small kernel across a grid, computing at each position a weighted sum of a local patch. Three quantities describe its cost, and all three are bookkeeping. First, the spatial size of the output: for an input of side \( n \), a kernel of side \( k \), padding \( p \), and stride \( s \),</p>
-\[ n_{\text{out}} = \left\lfloor \frac{n + 2p - k}{s} \right\rfloor + 1. \]
-<p>The floor is not a formality &mdash; it is where a great many arithmetic slips are born, because a fractional result must be truncated, not rounded. Second, the parameter count. A layer mapping \( C_{\text{in}} \) input channels to \( C_{\text{out}} \) output channels, with a kernel of side \( k \), holds \( k^2 C_{\text{in}} \) weights per output channel plus one bias each:</p>
-\[ \text{params} = (k^2 C_{\text{in}} + 1)\,C_{\text{out}}. \]
-<p>Forget the \( +1 \) and you will be a bias term short on every layer &mdash; a small error that the exercises will punish. Third, the arithmetic cost: producing one output pixel takes \( k^2 C_{\text{in}} C_{\text{out}} \) multiply&ndash;accumulate operations, and you multiply by the number of output pixels to get the layer's total.</p>
+<h2>3.1 The loss surface as a bowl</h2>
+<p>Near a minimum, any smooth loss looks like a bowl. Along some directions the walls are steep; along others they are shallow. If we align our coordinates with the natural axes of the bowl, the loss separates into independent one-dimensional pieces, each a simple parabola with its own steepness. A convenient model of a two-dimensional slice is</p>
+\[ L(x, y) = \tfrac{1}{2}\left(\lambda_1 x^2 + \lambda_2 y^2\right), \]
+<p>where \( \lambda_1 \) and \( \lambda_2 \) are the steepnesses &mdash; the curvatures &mdash; along the two axes. If \( \lambda_1 \) is much larger than \( \lambda_2 \), the bowl is a long narrow trough: steep across, shallow along. The number that captures this asymmetry is the ratio of the largest curvature to the smallest,</p>
+\[ \kappa = \frac{\lambda_{\max}}{\lambda_{\min}}, \]
+<p>called the <em>condition number</em>. A well-shaped bowl has \( \kappa \) near 1; a pathological valley has \( \kappa \) in the hundreds or thousands. Everything that follows is a statement about how badly a large \( \kappa \) hurts, and what can be done about it.</p>
+
+<h2>3.2 Why the step size is trapped</h2>
+<p>Gradient descent updates each coordinate by subtracting the step size \( \eta \) times the gradient. For our model surface the gradient along \( x \) is \( \lambda_1 x \), so the update is \( x \leftarrow x - \eta \lambda_1 x = (1 - \eta\lambda_1)x \), and likewise for \( y \). Each coordinate is simply multiplied, every step, by a fixed factor. From Chapter 1's stability reflex we know such an iteration converges exactly when the magnitude of the factor is below one.</p>
+
+<p>Before deriving it, guess. If one direction of the bowl is a hundred times steeper than another, how much does that slow you down &mdash; a little, or a lot? Most people's instinct is that it costs you a constant factor, some fixed tax for an awkward shape. The instinct is wrong, and wrong in an important way: the cost is proportional to the ratio itself, so a hundredfold asymmetry costs you roughly a hundredfold in steps. Here is where that comes from.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 3.1</span>
+<p class="title">The stable range of step sizes</p>
+<p>The coordinate \( x \) obeys \( x \leftarrow (1 - \eta\lambda_1)x \), which converges to zero if and only if \( |1 - \eta\lambda_1| < 1 \), i.e. \( 0 < \eta\lambda_1 < 2 \). The same holds for \( y \) with \( \lambda_2 \). Both must hold at once, and since \( \lambda_1 = \lambda_{\max} \) is the larger curvature, it is the binding one:</p>
+\[ 0 < \eta < \frac{2}{\lambda_{\max}}. \]
+<p>This is the whole trap in one line. The steep direction sets a ceiling on the step size. Any larger step and the iteration diverges along that axis, flinging the weights outward. So the step size is <em>hostage to the steepest curvature in the entire problem</em> &mdash; even though most directions would happily accept a far larger step.</p>
+</div>
+
+<p>Now watch what that ceiling does to the shallow direction. With \( \eta \) pinned just under \( 2/\lambda_{\max} \), the shallow coordinate contracts by a factor \( |1 - \eta\lambda_{\min}| \), which is close to \( 1 - 2\lambda_{\min}/\lambda_{\max} = 1 - 2/\kappa \). When \( \kappa \) is large this factor is barely below one: the shallow direction crawls. The steep direction, meanwhile, is oscillating back and forth across the valley, using up the entire step budget just to stay stable. The network is not stuck because it cannot represent the answer; it is stuck because the geometry forces it to inch down the valley floor while ricocheting between the walls.</p>
+
+<h2>3.3 Counting the cost of curvature</h2>
+<p>We can make the slowness precise. The error along the shallow direction contracts by a fixed factor each step, so reaching a target reduction is a logarithm problem of exactly the kind Chapter 1 drilled. It is a standard result &mdash; we take it as given here, the way a physics problem gives you a formula for terminal velocity &mdash; that gradient descent on such a surface, at the best possible fixed step size, contracts the error each step by</p>
+\[ \rho_{\text{GD}} = \frac{\kappa - 1}{\kappa + 1}, \]
+<p>while the same surface, optimized with a well-tuned <em>momentum</em> term that lets the shallow direction accumulate speed, contracts by</p>
+\[ \rho_{\text{mom}} = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}. \]
+<p>The number of steps to shrink the error by a factor \( F \) is \( t = \ln F / \ln(1/\rho) \). The two rates above look similar, but the square root inside the momentum rate is decisive, as the worked example shows.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 3.1</span>
-<p class="title">Tracing a dimension through the opening layers</p>
-<p>A \( 227 \times 227 \times 3 \) image enters a layer of 96 kernels, each \( 11 \times 11 \), stride 4, no padding; the result passes through a \( 3 \times 3 \) max-pool at stride 2. Trace the spatial size and count the convolution's parameters.</p>
-<p>Convolution output side: \( \lfloor (227 - 11)/4 \rfloor + 1 = \lfloor 216/4 \rfloor + 1 = 54 + 1 = 55 \). Pooling output side: \( \lfloor (55 - 3)/2 \rfloor + 1 = \lfloor 52/2 \rfloor + 1 = 26 + 1 = 27 \). So the feature map is \( 27 \times 27 \). Parameters in the convolution: \( (11^2 \cdot 3 + 1)\cdot 96 = (363 + 1)\cdot 96 = 364 \cdot 96 = 34{,}944 \). Drop the bias and you get \( 34{,}848 \) &mdash; the classic off-by-a-bias mistake.</p>
+<p class="title">Three hundred and forty-five steps, or thirty-four</p>
+<p>Take a valley with \( \kappa = 100 \) &mdash; steep direction a hundred times sharper than the shallow one &mdash; and ask how many steps each method needs to reduce the error a thousandfold.</p>
+<p>For plain gradient descent, \( \rho_{\text{GD}} = 99/101 = 0.9802 \), so \( t = \ln(1000)/\ln(1/0.9802) = 6.908/0.02 = 345 \) steps. For momentum, \( \rho_{\text{mom}} = 9/11 = 0.8182 \), so \( t = 6.908/\ln(1/0.8182) = 6.908/0.2007 = 34 \) steps. The ratio is almost exactly ten &mdash; which is \( \sqrt{\kappa} = \sqrt{100} \).</p>
+<p>This is the quantitative content of the phrase &ldquo;momentum glides along the valley floor.&rdquo; Plain descent pays a cost proportional to \( \kappa \); momentum pays a cost proportional to \( \sqrt{\kappa} \). On a valley conditioned at \( 10^4 \), that is the difference between ten thousand steps and one hundred.</p>
+</div>
+
+<div class="box deriv">
+<span class="label">Derivation 3.2 &middot; protocol</span>
+<p class="title">Why the speedup is the square root</p>
+<p>The two rates differ only by a square root inside them, and it is worth seeing exactly how that becomes a square root in the step count. Expand each for large \( \kappa \).</p>
+<p>For plain descent, \( \rho_{\text{GD}} = \frac{\kappa-1}{\kappa+1} \approx 1 - \frac{2}{\kappa} \). Since \( \ln(1-x) \approx -x \) for small \( x \),</p>
+\[ \ln\frac{1}{\rho_{\text{GD}}} \approx \frac{2}{\kappa}. \]
+<p>For momentum, \( \rho_{\text{mom}} = \frac{\sqrt\kappa-1}{\sqrt\kappa+1} \approx 1 - \frac{2}{\sqrt\kappa} \), so \( \ln(1/\rho_{\text{mom}}) \approx 2/\sqrt\kappa \).</p>
+<p>The step count to shrink the error by a factor \( F \) is \( t = \ln F/\ln(1/\rho) \), so the ratio of counts is the inverse ratio of those logarithms:</p>
+\[ \frac{t_{\text{GD}}}{t_{\text{mom}}} \approx \frac{2/\sqrt\kappa}{2/\kappa} = \sqrt{\kappa}. \]
+<p>The whole effect is that momentum's rate carries \( \sqrt\kappa \) where plain descent carries \( \kappa \), and the logarithm turns a difference of rates into a ratio of counts. At \( \kappa = 100 \) that is the factor of ten of Worked Example 3.1; at \( \kappa = 10^4 \) it is a hundred.</p>
 </div>
 
 <div class="drill">
 <span class="label">Drill 3.1</span>
-<p>A \( 55 \times 55 \) feature map passes through two successive \( 3 \times 3 \) max-pools, each at stride 2, no padding. What is the final spatial side?</p>
+<p>A valley has \( \kappa = 400 \). Estimate the ratio of plain-gradient-descent steps to momentum steps for the same error reduction, without computing either count in full.</p>
 <details><summary>Show answer</summary>
-<p>First pool: \( \lfloor (55-3)/2 \rfloor + 1 = 27 \). Second: \( \lfloor (27-3)/2 \rfloor + 1 = 13 \). Final side \( 13 \).</p>
-</details>
-</div>
-
-<p>One design decision recurs so often it deserves its own note: replacing a single large kernel with a stack of small ones. Two stacked \( 3\times3 \) convolutions see the same \( 5\times5 \) input region as one \( 5\times5 \) convolution &mdash; the receptive fields match &mdash; but the stack holds fewer weights and applies its nonlinearity twice instead of once. For \( C \) channels throughout, one \( 5\times5 \) layer holds \( 25C^2 \) weights; two \( 3\times3 \) layers hold \( 2 \times 9C^2 = 18C^2 \). The stack is cheaper <em>and</em> more expressive, which is why deep stacks of tiny kernels displaced wide ones.</p>
-
-<div class="drill">
-<span class="label">Drill 3.2</span>
-<p>With \( C = 256 \) channels, how many weights are saved by replacing one \( 5\times5 \) convolution with two stacked \( 3\times3 \) convolutions? Give the answer to the nearest thousand.</p>
-<details><summary>Show answer</summary>
-<p>\( 25C^2 - 18C^2 = 7C^2 = 7 \times 65{,}536 = 458{,}752 \), about \( 459{,}000 \).</p>
-</details>
-</div>
-
-<h2>3.2 The residual connection, and the three theorems inside it</h2>
-<p>A residual block does not compute a new representation from scratch; it computes a <em>correction</em> to its input. Writing \( h_\ell \) for the activations after block \( \ell \), a residual block sets</p>
-\[ h_\ell = h_{\ell-1} + F_\ell(h_{\ell-1}), \]
-<p>where \( F_\ell \) is the block's learned transformation. The added \( h_{\ell-1} \) &mdash; the &ldquo;skip&rdquo; or &ldquo;identity&rdquo; path &mdash; looks almost too simple to matter. It matters three separate ways, and untangling them is the heart of this chapter.</p>
-
-<h3>First theorem: the gradient has a floor</h3>
-<p>Consider how a gradient travels backward through the stack. The sensitivity of the output to the input is a product of per-block Jacobians. For a residual block, that Jacobian is \( I + J_\ell \), where \( J_\ell \) is the Jacobian of \( F_\ell \) alone. Across \( L \) blocks,</p>
-\[ \frac{\partial h_L}{\partial h_0} = \prod_{\ell=1}^{L} (I + J_\ell). \]
-<p>Expand this product and something remarkable appears.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 3.1</span>
-<p class="title">The indestructible identity</p>
-<p>Multiplying out \( \prod_{\ell=1}^{L}(I + J_\ell) \), each factor contributes either its \( I \) or its \( J_\ell \). A term that takes \( J \) from exactly \( k \) of the factors, and \( I \) from the rest, is a product of \( k \) Jacobians; there are \( \binom{L}{k} \) such terms. The expansion is thus organized by how many blocks a path passes through:</p>
-\[ \frac{\partial h_L}{\partial h_0} = \underbrace{I}_{k=0} + \underbrace{\sum_\ell J_\ell}_{k=1} + \underbrace{\sum_{i<j} J_j J_i}_{k=2} + \cdots \]
-<p>Look at the \( k=0 \) term: it is the bare identity \( I \), formed by taking \( I \) from every factor. It contains none of the \( J_\ell \), so no amount of shrinking the individual Jacobians can destroy it. However small every \( F_\ell \) becomes, the gradient still contains an undiminished identity path from output to input.</p>
-<p>Contrast a plain network, whose Jacobian is the product \( \prod_\ell J_\ell \) with no added identities. If those Jacobians are even slightly contractive, their product shrinks geometrically with depth &mdash; the vanishing gradient. The residual network's guarantee is exactly the surviving \( I \): a floor beneath the gradient that the plain network lacks.</p>
-</div>
-
-<h3>Second theorem: depth is an ensemble of shallow paths</h3>
-<p>The expansion above has a second reading. Each term is a <em>path</em>: a choice, at each block, of whether to pass through the transformation or skip it. There are \( 2^L \) such paths, and a path's &ldquo;length&rdquo; is the number of blocks it actually traverses. How long is a typical path? Since each block is independently taken or skipped, the length of a random path is a sum of \( L \) independent coin flips &mdash; a binomial distribution, exactly the object Chapter 1 prepared.</p>
-
-<p>Ask yourself first what you expect the answer to be. A network with fifty-four residual blocks contains paths of every length from zero to fifty-four. If you had to guess the typical path length, you might reasonably say &ldquo;most of them are long, since the network is deep.&rdquo; Hold that thought; the arithmetic is about to disagree with it, and the disagreement is the entire reason very deep residual networks train at all.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 3.2</span>
-<p class="title">Most paths are short</p>
-<p>Model each block as traversed with probability \( \tfrac12 \). A path's length is then \( \text{Binomial}(L, \tfrac12) \), with mean \( L/2 \) and variance \( L/4 \). For \( L = 54 \) blocks, the mean length is 27 and the standard deviation is \( \sqrt{54/4} = \sqrt{13.5} = 3.674 \).</p>
-<p>What fraction of paths have length between 20 and 34? Using the normal approximation with a half-unit continuity correction, the standardized endpoints are \( (19.5 - 27)/3.674 = -2.04 \) and \( (34.5 - 27)/3.674 = +2.04 \). The enclosed probability is \( 2\Phi(2.04) - 1 = 2(0.9793) - 1 = 0.959 \).</p>
-<p>So about \( 96\% \) of the paths through a 54-block network &mdash; a network more than a hundred layers deep &mdash; traverse between 20 and 34 blocks. The network behaves less like one very deep chain and more like an <em>ensemble of many moderately shallow paths</em>. Depth, in a residual network, is a reservoir of shallow routes, not a single long one; and gradients flow easily precisely because most routes are short.</p>
-</div>
-
-<h3>Third theorem: signals drift, so normalization belongs inside</h3>
-<p>The third consequence is about scale. Each block adds its correction to the running signal. If those corrections are roughly independent and zero-mean, then by Chapter 1's variance algebra their accumulated effect at any fixed coordinate grows in variance like the number of blocks &mdash; standard deviation like \( \sqrt{L} \).</p>
-
-<div class="box worked">
-<span class="label">Worked Example 3.2</span>
-<p class="title">Square-root drift</p>
-<p>Suppose each of \( L = 100 \) blocks adds, at a fixed output coordinate, an independent zero-mean perturbation of variance \( 0.01 \). The accumulated variance is \( 100 \times 0.01 = 1 \), so the standard deviation is \( 1.0 \) &mdash; comparable to the signal itself. Had we used \( L = 400 \) blocks, the drift would be \( \sqrt{4} = 2 \). The signal swells as it descends the stack.</p>
-<p>This is why normalization layers are placed <em>inside</em> the residual branch, rescaling \( F_\ell \)'s output before it is added, rather than on the skip path. Keep the identity path clean and controlled, and let the normalization tame the drifting correction &mdash; a design that the &ldquo;pre-activation&rdquo; residual block makes explicit.</p>
-</div>
-
-<h3>The bottleneck: buying depth cheaply</h3>
-<p>A last piece of residual arithmetic concerns cost. Very deep networks cannot afford full-width \( 3\times3 \) convolutions at every block, so the bottleneck block compresses the channels first: a \( 1\times1 \) convolution reduces \( C \) channels to \( C/c \), a \( 3\times3 \) operates in that narrow space, and a final \( 1\times1 \) restores the width. Because the expensive \( 3\times3 \) now runs on \( 1/c \) of the channels, it costs \( 1/c^2 \) as much.</p>
-
-<div class="box worked">
-<span class="label">Worked Example 3.3</span>
-<p class="title">Seventeen to one</p>
-<p>Compare, at one spatial position with 256 channels, two stacked \( 3\times3 \) convolutions against a bottleneck with compression \( c=4 \) (256 down to 64). The plain pair costs \( 2 \cdot 9 \cdot 256^2 = 1{,}179{,}648 \) multiply&ndash;accumulates. The bottleneck costs \( (256\cdot 64) + (9\cdot 64^2) + (64\cdot 256) = 16{,}384 + 36{,}864 + 16{,}384 = 69{,}632 \). The ratio is \( 16.9 \), close to 17 to 1. The narrow middle is where nearly all the saving lives.</p>
-</div>
-
-<div class="drill">
-<span class="label">Drill 3.3</span>
-<p>At compression \( c = 8 \) (256 channels down to 32), estimate the bottleneck's MAC ratio against the plain \( 3\times3 \) pair. (Use the same structure: two \( 1\times1 \) layers plus one \( 3\times3 \) in the narrow space, all at 256 outer channels.)</p>
-<details><summary>Show answer</summary>
-<p>Plain pair \( = 18C^2 \). Bottleneck \( = C\cdot(C/8) + 9(C/8)^2 + (C/8)\cdot C = C^2/8 + 9C^2/64 + C^2/8 = C^2(8/64 + 9/64 + 8/64) = 25C^2/64 \). Ratio \( = 18/(25/64) = 18 \times 64/25 \approx 46 \) to 1.</p>
-</details>
-</div>
-
-<h2>3.3 Dilation: seeing far without paying for it</h2>
-<p>Some tasks &mdash; labeling every pixel of an image, say &mdash; need each output to depend on a wide swath of input, yet must not blur away fine detail by pooling. Dilation resolves the tension. A dilated kernel spreads its taps apart, leaving gaps: a \( 3\times3 \) kernel with dilation \( r \) still has nine weights, but they sample a region \( (2r+1) \) wide. Stacking dilated layers grows the reach geometrically while the parameter count grows not at all per layer.</p>
-
-<div class="box deriv">
-<span class="label">Derivation 3.3</span>
-<p class="title">Exponential reach for linear cost</p>
-<p>Adding a \( 3\times3 \) layer of dilation \( r \) extends the receptive field by \( 2r \) on each axis: its outer taps reach \( r \) beyond the current field on each side. So a stack with dilations \( 1, 2, 4, \dots, 2^{n-1} \) has receptive field</p>
-\[ 1 + 2(1 + 2 + 4 + \cdots + 2^{n-1}) = 1 + 2(2^n - 1) = 2^{n+1} - 1. \]
-<p>An undilated stack, by contrast, grows its field by 2 per layer, reaching only \( 2n + 1 \) after \( n \) layers &mdash; linear, not exponential. To cover a \( 31\times31 \) field, the dilated stack needs \( n = 4 \) layers (\( 2^5 - 1 = 31 \)); the undilated stack needs \( n = 15 \). Same kernels, same per-layer weights; four layers against fifteen.</p>
-<p>The saving against a single wide kernel is even starker. A lone kernel covering a \( 511\times511 \) field would hold \( 511^2 = 261{,}121 \) weights per channel pair; the dilated stack that reaches the same field (\( n = 8 \), since \( 2^9 - 1 = 511 \)) holds \( 8 \times 9 = 72 \). The ratio is about 3,600 to one. Exponential context, linear parameters &mdash; the entire case for dilation in one comparison.</p>
-</div>
-
-<div class="drill">
-<span class="label">Drill 3.4</span>
-<p>Using \( 3\times3 \) kernels with dilations \( 1, 2, 4, \dots \), find the smallest number of layers whose receptive field reaches at least \( 1000 \). Then give the ratio of a single equivalent kernel's weights to the stack's.</p>
-<details><summary>Show answer</summary>
-<p>\( 2^{n+1} - 1 \ge 1000 \Rightarrow 2^{n+1} \ge 1001 \Rightarrow n+1 \ge 10 \Rightarrow n = 9 \), giving a field of \( 1023 \). Single-kernel weights \( 1023^2 = 1{,}046{,}529 \); stack \( 9 \times 9 = 81 \); ratio \( \approx 12{,}900 \) to one.</p>
+<p>The ratio of step counts is \( \ln(1/\rho_{\text{GD}}) \) versus \( \ln(1/\rho_{\text{mom}}) \) inverted, which for large \( \kappa \) tends to \( \sqrt{\kappa} \). Here \( \sqrt{400} = 20 \). (Explicitly: \( \rho_{\text{GD}} = 399/401 \Rightarrow \ln(1/\rho) = 0.005 \); \( \rho_{\text{mom}} = 19/21 \Rightarrow \ln(1/\rho) = 0.100 \); ratio \( 0.100/0.005 = 20 \).)</p>
 </details>
 </div>
 
 <div class="box trap">
-<span class="label">Trap &middot; T5</span>
-<p>Dilation is often misremembered as reducing resolution, like pooling. It does the opposite: it widens the receptive field <em>without</em> downsampling, which is exactly why it suits dense, pixel-level prediction where pooling would throw away the detail you are trying to recover. And the factorization of one \( 5\times5 \) into two \( 3\times3 \) layers is often said to &ldquo;save computation at the cost of expressiveness&rdquo; &mdash; also backwards. The stack is both cheaper and applies an extra nonlinearity; the expressiveness goes <em>up</em>.</p>
+<span class="label">Trap &middot; T1</span>
+<p>The deeper failure this chapter describes is a <em>training</em> failure, not overfitting. When a plain deep network does worse than a shallow one, the instinct is to suspect it has memorized and failed to generalize. But the error that rises is the training error itself: the optimizer never reached a good setting at all. Confusing an optimization failure with a generalization failure sends you reaching for the wrong remedy &mdash; regularization instead of better conditioning &mdash; and it is one of the most common misreadings of the early deep-learning literature.</p>
 </div>
 
-<h2>3.4 What the chapter bought</h2>
-<p>Convolution arithmetic is the ruler we will measure every later architecture with; keep the floor, the bias, and the multiply&ndash;accumulate count automatic. The residual connection turned out to be three ideas: a gradient floor guaranteed by an indestructible identity term, an ensemble of predominantly shallow paths that makes great depth trainable, and a \( \sqrt{L} \) signal drift that dictates where normalization goes. Dilation buys exponential reach for linear cost. Together these are how architecture began to do the optimizer's work &mdash; shaping the loss surface, and the flow of gradients across it, so that depth became an asset rather than an obstacle. Chapter 4 turns from space to time, and asks the same question about sequences: what makes a recurrent network trainable, and what pins its memory in place?</p>
+<h2>3.4 Starting in the right place: the statistics of initialization</h2>
+<p>Conditioning governs how the optimizer moves once it starts; initialization governs whether it can start at all. Two separate requirements fall directly out of Chapter 1's variance algebra, and both were, historically, hard-won.</p>
+<p>The first is scale. Recall the fan-in derivation: a unit summing \( m \) unit-variance inputs with weights of variance \( \sigma^2 \) produces an output of variance \( m\sigma^2 \). If \( \sigma^2 \) is chosen carelessly, signal either explodes or vanishes as it crosses each layer, and a deep stack multiplies that error many times over. Preserving the scale of activations from layer to layer requires</p>
+\[ \sigma^2 = \frac{1}{m}, \]
+<p>the principle behind every sensible initialization scheme. The precise constant is adjusted for the nonlinearity in use, but the \( 1/m \) skeleton is always there.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 3.2</span>
+<p class="title">A too-small initialization</p>
+<p>A layer has fan-in \( m = 4096 \). The variance-preserving choice is \( \sigma^2 = 1/4096 \), i.e. \( \sigma \approx 0.0156 \). Suppose instead someone initializes with a flat \( \sigma = 0.01 \). The output variance is then \( m\sigma^2 = 4096 \times 10^{-4} = 0.41 \). Each layer shrinks the signal to under half its variance; across a dozen layers the activations have all but vanished, and with them the gradients. The network trains glacially or not at all &mdash; not because anything is conceptually wrong, but because a single variance was set a factor of \( 1.5 \) too small and compounded.</p>
+</div>
+
+<p>The second requirement is asymmetry. Suppose every weight in a layer were initialized to the same constant. Then every unit in that layer computes the identical function of the inputs, receives the identical gradient, and updates identically &mdash; forever. The layer, however wide, collapses to a single effective unit, and no amount of training breaks the tie. This is why initialization must be <em>random</em>: randomness is what breaks the symmetry between units and lets them specialize. It is a one-line argument, but it is the reason a fundamental-looking operation &mdash; &ldquo;set the weights to a sensible constant&rdquo; &mdash; is quietly fatal.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 3.3</span>
+<p class="title">Symmetry never breaks itself</p>
+<p>Consider two units in a layer, with incoming weight vectors \( w_1 \) and \( w_2 \), fed the same inputs. If \( w_1 = w_2 \) at initialization, then their outputs are equal at every input, so the loss depends on them only through their sum. The gradient of the loss with respect to \( w_1 \) therefore equals the gradient with respect to \( w_2 \), and one gradient step keeps \( w_1 = w_2 \). By induction the two are equal for all time. The only way to give them distinct gradients is to start them at distinct values &mdash; hence random initialization.</p>
+</div>
+
+<p>A small practical corollary closes the chapter, and it too is pure Chapter-1 reasoning. Units with a rectified activation &mdash; zero for negative inputs, linear for positive &mdash; contribute no gradient when their input is negative, and a unit that begins with a negative bias may sit dead from the start. Nudging the initial bias slightly positive shifts the input distribution rightward, so more units begin in their active region and receive gradient. The same variance-and-mean bookkeeping that governs the weights governs this choice; it is not a trick so much as an accounting consequence.</p>
+
+<div class="drill">
+<span class="label">Drill 3.2</span>
+<p>A layer has fan-in \( m = 1024 \). (a) What \( \sigma \) preserves unit output variance? (b) If instead \( \sigma = 0.05 \) is used, what is the output variance, and does the signal grow or shrink across the layer?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( \sigma = 1/\sqrt{1024} = 1/32 \approx 0.031 \). (b) Output variance \( = 1024 \times 0.0025 = 2.56 \); since this exceeds 1, the signal <em>grows</em> across the layer, and would explode across a deep stack.</p>
+</details>
+</div>
+
+<h2>3.5 What the chapter bought</h2>
+<p>Everything that follows rests on what this chapter established, and all of it came from Chapter 1's tools. The stable step size is capped by the steepest curvature, so a badly conditioned problem is slow no matter how patient you are. Momentum converts that \( \kappa \)-sized penalty into a \( \sqrt{\kappa} \)-sized one &mdash; the first appearance of a theme, adaptivity to geometry, that runs through the rest of the field. And initialization is a variance-and-symmetry problem whose answers are forced, not chosen. Chapter 4 takes up the complementary question: if optimization is this sensitive to the shape of the surface, can we <em>build</em> networks whose surfaces are easier to descend? The answer &mdash; residual connections &mdash; is where architecture begins to do the optimizer's job for it.</p>
 
 <h2>Exercises</h2>
 <div class="exset">
 <p class="exgrade">A &middot; Drills</p>
 <ol class="ex">
-<li>A \( 224\times224 \) input meets a \( 7\times7 \) kernel, stride 2, padding 3. Give the output side.</li>
-<li>A convolution maps 64 channels to 128 with \( 3\times3 \) kernels and biases. Count its parameters.</li>
-<li>For \( L = 20 \) residual blocks, how many distinct forward paths exist, and what is the mean path length?</li>
-<li>A dilated \( 3\times3 \) stack uses dilations \( 1,2,4,8 \). Give its receptive field.</li>
+<li>A valley has curvatures \( \lambda_{\max} = 50 \), \( \lambda_{\min} = 2 \). Give \( \kappa \) and the largest stable step size.</li>
+<li>For \( \kappa = 100 \), compute \( \rho_{\text{GD}} \) and \( \rho_{\text{mom}} \) to four decimal places.</li>
+<li>A layer of fan-in 256 is to preserve activation variance. What weight standard deviation does that require?</li>
+<li>Explain in two sentences why initializing all weights of a layer to \( 0.1 \) is no better than initializing them all to \( 0 \).</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
-<li><strong>The path ensemble at 100 blocks.</strong> For \( L = 100 \) residual blocks with each block traversed at probability \( \tfrac12 \), estimate the fraction of paths whose length lies between 40 and 60 inclusive, using the normal approximation with continuity correction.</li>
-<li><strong>Where the saving lives.</strong> Derive the general bottleneck-to-plain MAC ratio as a function of the compression factor \( c \), taking the plain design as two \( 3\times3 \) convolutions at \( C \) channels and the bottleneck as \( 1\times1 \) down, \( 3\times3 \) narrow, \( 1\times1 \) up. Evaluate at \( c = 2 \) and \( c = 4 \), and say what happens as \( c \) grows large.</li>
-<li><strong>Reach versus depth.</strong> You must cover a \( 255\times255 \) receptive field with \( 3\times3 \) kernels. Give the number of dilated layers required, the number of undilated layers required, and the ratio of a single equivalent kernel's weights to the dilated stack's.</li>
+<li><strong>The valley, end to end.</strong> For the surface \( L(x,y) = \tfrac12(\lambda_1 x^2 + \lambda_2 y^2) \) with \( \lambda_1 = 200 \), \( \lambda_2 = 2 \): (a) give the largest stable \( \eta \); (b) with \( \eta \) set to \( 90\% \) of that ceiling, give the per-step contraction factor along each axis; (c) estimate how many steps the shallow direction needs to contract a hundredfold, and comment on how many the steep direction &ldquo;wastes&rdquo; oscillating.</li>
+<li><strong>The square-root promise, at a second condition number.</strong> Reproduce Derivation 3.2 from nothing, then evaluate both step counts explicitly at \( \kappa = 2500 \) for a thousandfold error reduction, and confirm the ratio is 50. State in one sentence why the approximation \( \ln(1-x) \approx -x \) is safe here.</li>
+<li><strong>Compounded initialization error.</strong> A twelve-layer stack, each layer fan-in 500, is initialized with a uniform \( \sigma = 1/\sqrt{1000} \) &mdash; a factor \( \sqrt{2} \) too small. By what factor has the activation variance changed after all twelve layers, relative to a variance-preserving initialization?</li>
 </ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>
 <ol class="ex">
-<li><strong>Why identity mappings help twice.</strong> The &ldquo;pre-activation&rdquo; residual block moves normalization and nonlinearity <em>before</em> the convolutions, so the skip path is a clean, unmodified identity. Argue, using Derivation 3.1, why keeping the skip path free of any transformation strengthens the gradient-floor guarantee; then, using Worked Example 3.2, argue why it also helps control the \( \sqrt{L} \) drift. What single principle unifies the two arguments?</li>
+<li><strong>Reconditioning by rescaling.</strong> Suppose a diagonal preconditioner multiplies the gradient along each axis by the reciprocal of that axis's curvature, so the effective update along axis \( i \) becomes \( x_i \leftarrow (1 - \eta)x_i \). Show that this makes the effective condition number 1, and explain in a sentence what real second-order and adaptive methods are approximating when they do something like this. (This is the conceptual bridge from this chapter to why adaptive optimizers exist.)</li>
 </ol>
 </div>
 
 <div class="gate">
 <span class="label">Gate 3 &middot; Pass before Chapter 4</span>
-<p>Reproduce Derivations 3.1 (the identity term) and 3.2 (the path-length binomial) on blank paper, and trace one full convolution-and-pool dimension chain in under three minutes. Attempt B-1 and B-2 closed book. You pass when the three derivations come without hesitation and the arithmetic carries its biases and floors intact.</p>
+<p>Reproduce Derivations 3.1 (the stable step range) and 3.2 (the \( \sqrt{\kappa} \) speedup) on blank paper, then attempt B-1 closed book. This is the first of the three derivations carrying the three-separate-days protocol: return to the \( \kappa \)-versus-\( \sqrt{\kappa} \) result on two later days and reproduce it cold each time. It is the template for the compute-optimal derivation of Chapter 7, and the fluency you build here is the fluency you will spend there.</p>
 </div>
 
 <div class="readings">
 <h4>Readings for Chapter 3</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/1512.03385">He, Zhang, Ren &amp; Sun, <em>Deep Residual Learning for Image Recognition</em> (2015)</a><span class="how">Read the ablations as experiments about Derivation 3.1 &mdash; the degradation problem is the vanishing gradient this chapter cures.</span></li>
-<li><a href="https://arxiv.org/abs/1603.05027">He et al., <em>Identity Mappings in Deep Residual Networks</em> (2016)</a><span class="how">The pre-activation block of the C-challenge, argued in full; compare their reasoning to yours.</span></li>
-<li><a href="https://arxiv.org/abs/1605.06431">Veit, Wilber &amp; Belongie, <em>Residual Networks Behave Like Ensembles of Relatively Shallow Networks</em> (2016)</a><span class="how">Derivation 3.2, measured: they delete blocks at test time and watch the ensemble degrade gracefully.</span></li>
-<li><a href="https://arxiv.org/abs/1511.07122">Yu &amp; Koltun, <em>Multi-Scale Context Aggregation by Dilated Convolutions</em> (2015)</a><span class="how">The origin of Derivation 3.3; note how the exponential schedule is chosen for dense prediction.</span></li>
-<li><a href="https://cs231n.github.io/convolutional-networks/">Stanford CS231n &mdash; Convolutional Networks</a><span class="how">The standing reference for the arithmetic of Section 3.1; work its worked examples against yours.</span></li>
+<li><a href="https://www.cs.toronto.edu/~jmartens/docs/Deep_HessianFree.pdf">Martens, <em>Deep Learning via Hessian-Free Optimization</em> (2010)</a><span class="how">Read the first two sections for the pathological-curvature argument in its original setting &mdash; the paper that made conditioning central.</span></li>
+<li><a href="https://proceedings.neurips.cc/paper/2012/hash/c399862d3b9d6b76c8436e924a68c45b-Abstract.html">Krizhevsky, Sutskever &amp; Hinton, <em>ImageNet Classification with Deep CNNs</em> (2012)</a><span class="how">The initialization and optimization choices in Sections 3&ndash;5 are the practical face of this chapter's theory.</span></li>
+<li><a href="https://cs231n.github.io/neural-networks-3/">Stanford CS231n &mdash; Optimization notes</a><span class="how">The standing reference for step sizes, momentum, and adaptive methods; work the update-rule sections against your Derivation 3.1.</span></li>
+<li><a href="https://distill.pub/2017/momentum/">Goh, <em>Why Momentum Really Works</em> (Distill, 2017)</a><span class="how">The &ldquo;Dynamics of Momentum&rdquo; section and the convergence-rate figure under it &mdash; exactly the \( \sqrt{\kappa} \) result of B-2, made interactive. Move the sliders until the geometry is intuitive, then close it and reproduce the result cold.</span></li>
 </ul>
 </div>
 
 <footer>
-  <span>Chapter 3 &middot; The Architecture of Depth</span>
-  <span><a href="chapter-04.html">Next: Memory and Gates &rarr;</a></span>
+  <span>Chapter 3 &middot; The Geometry of Training</span>
+  <span><a href="chapter-04.html">Next: The Architecture of Depth &rarr;</a></span>
 </footer>
 
 </div>
