@@ -37,6 +37,8 @@ Other targets:
 ```bash
 make figure      # regenerate the cover figure from its equations
 make audit       # run the source consistency checks
+make numbers     # recompute the derived figures and check the source agrees
+make check       # both of the above
 make serve       # preview the web edition at localhost:8000
 make clean       # remove build artefacts
 ```
@@ -107,7 +109,7 @@ One honest note: *optimally* tuned momentum (η = (2/(√λ_max+√λ_min))², �
 
 ## The audit
 
-`make audit` runs six classes of check over the source. They exist because this book was drafted in batches, and every one of them caught a real error at some point:
+`make audit` runs ten classes of check over the source. They exist because this book was drafted in batches, and every one of them caught a real error at some point:
 
 1. **Structure** — every chapter carries the same furniture: lead paragraph, derivation and worked-example boxes, closing section, readings, graded A/B/C exercises, a gate.
 2. **Links** — every internal `href` resolves.
@@ -115,6 +117,16 @@ One honest note: *optimally* tuned momentum (η = (2/(√λ_max+√λ_min))², �
 4. **Derivation references** — every "Derivation N.M" cited in a chapter is actually defined there.
 5. **Solution coverage** — every B and C exercise has a matching solution in Appendix D.
 6. **Prose** — chapter openings are not built from one template. This check exists because an early draft had twelve of sixteen chapters opening with the literal words "This chapter", which is invisible while writing and obvious while reading.
+7. **Back-references** — a chapter that says "Chapter N's X" is asserting that Chapter N contains X. Two such claims were false: Chapter 5 credited Chapter 1 with the matrix-multiply cost and Chapter 8 credited it with Bayes' rule, neither of which Chapter 1 contains.
+8. **Derivation bank** — every chapter is represented in Appendix A, no entry spans several chapters, and no chapter carries more bank entries than it has boxes to teach them in.
+9. **Lab anchoring** — every lab in Appendix C runs alongside the chapter of the derivation its acceptance criterion cites, rather than several chapters later.
+10. **Reading locators** — every reading annotation names where in the source to look: a section, a figure, a table, a page count. "How to read it" applied to an entire paper is not a locator.
+
+`make numbers` is separate, and closes the gap `docs/NUMBERS.md` admits to: it recomputes the figures that follow from the reference hardware and the lifecycle model — ridge point, cache sizes, decode ceilings, MFU, lifetime costs, break-even — and checks the prose against them. It caught a decode ceiling in Appendix D that was a factor of two out and contradicted Chapter 12.
+
+### The ratchet
+
+Checks 7–10 were added against a book that already fails them, and the fixes are scheduled work (`docs/SECOND-EDITION-PLAN.md`). So the audit runs as a ratchet: known failures live in `tools/audit-baseline.txt` and do not break the build, anything new does, and a baselined failure that has been fixed must be struck from the file. The count only goes down.
 
 ---
 
