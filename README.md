@@ -4,7 +4,7 @@
 
 By Anshu Avinash.
 
-A textbook that teaches machine learning the way physics is taught to engineers: as a small set of results you derive, drill, and then recognise everywhere. Seventeen chapters, four appendices, thirty-eight core derivations, roughly two hundred exercises with worked solutions, and eight labs whose acceptance criterion is a number your derivation predicted in advance.
+A textbook that teaches machine learning the way physics is taught to engineers: as a small set of results you derive, drill, and then recognise everywhere. Seventeen chapters, five appendices, fifty core derivations, roughly two hundred exercises with worked solutions, and eight labs whose acceptance criterion is a number your derivation predicted in advance.
 
 Nothing in the book asks you to memorise a benchmark score, a release date, or an author list. Where a constant from the literature is needed it is *given*, the way `g = 9.8 m/s²` is given in a physics paper. What is never given is the model you must build to use it.
 
@@ -15,11 +15,11 @@ Nothing in the book asks you to memorise a benchmark score, a release date, or a
 | Part | Chapters |
 |---|---|
 | **I — Foundations** | 1 The Mathematical Toolkit · 2 The Objects |
-| **II — The Classical Era (2012–2022)** | 2 The Geometry of Training · 3 The Architecture of Depth · 4 Memory and Gates · 5 Attention · 6 The Economics of Scale · 7 The Machinery of Scale · 8 Measurement · 9 Compression and Occam |
-| **III — The Modern Era (2022– )** | 10 The Price of a Token · 11 Bytes over FLOPs · 12 Sparsity and Thrift · 13 Teaching Preferences · 14 Thinking at Inference Time · 15 Generation by Denoising · 16 The Whole Lifecycle |
+| **II — The Classical Era (2012–2022)** | 3 The Geometry of Training · 4 The Architecture of Depth · 5 Memory and Gates · 6 Attention · 7 The Economics of Scale · 8 The Machinery of Scale · 9 Measurement · 10 Compression and Occam |
+| **III — The Modern Era (2022– )** | 11 The Price of a Token · 12 Bytes over FLOPs · 13 Sparsity and Thrift · 14 Teaching Preferences · 15 Thinking at Inference Time · 16 Generation by Denoising · 17 The Whole Lifecycle |
 | **Appendices** | A The Derivation Bank · B The Trap Taxonomy · C The Lab Manual · D Solutions · E Notation and Glossary |
 
-Two editions are built from the same source: a linked **[web edition](https://igniting.github.io/arithmetic-of-intelligence/)** (`src/index.html`, math rendered in-browser by KaTeX) and a 177-page **PDF** (math pre-rendered, fonts embedded, fully self-contained). The PDF is built by CI and available as a build artifact on each push.
+Two editions are built from the same source: a linked **[web edition](https://igniting.github.io/arithmetic-of-intelligence/)** (`src/index.html`, math rendered in-browser by KaTeX) and a **[PDF](https://igniting.github.io/arithmetic-of-intelligence/The-Arithmetic-of-Intelligence.pdf)** (math pre-rendered, fonts embedded, fully self-contained). Both are deployed to GitHub Pages on every push to main.
 
 ---
 
@@ -51,10 +51,10 @@ The web edition is the canonical source. The PDF is derived from it in four step
    Generates the cover figure by actually running the optimisers (see below).
 
 2. **`build/prerender.js`** → `.cache/rendered/`
-   Walks every `\( … \)` and `\[ … \]` expression in `src/*.html` and replaces it with static KaTeX markup — about 1,850 expressions. Strips the CDN `<script>` and `<link>` tags. Fails loudly rather than silently dropping an expression.
+   Walks every `\( … \)` and `\[ … \]` expression in `src/*.html` and replaces it with static KaTeX markup — about 2,300 expressions. Strips the CDN `<script>` and `<link>` tags. Fails loudly rather than silently dropping an expression.
 
 3. **`build/assemble.py`** → `.cache/book-print.html`
-   Merges the twenty chapter and appendix files into one document with part dividers, a table of contents, and running page numbers. Inlines `build/print.css`, the KaTeX stylesheet, and all fonts as base64 data URIs, so the output is a single self-contained file.
+   Merges the twenty-two chapter and appendix files into one document with part dividers, a table of contents, and running page numbers. Inlines `build/print.css`, the KaTeX stylesheet, and all fonts as base64 data URIs, so the output is a single self-contained file.
 
 4. **`build/topdf.py`** → `dist/`
    Renders with WeasyPrint (chosen over headless-Chrome for its `@page` support: real page geometry, running page numbers, and `target-counter` so the contents page resolves actual page numbers) and stamps PDF metadata.
@@ -83,8 +83,8 @@ One honest note: *optimally* tuned momentum (η = (2/(√λ_max+√λ_min))², �
 ├── src/                    # the book — canonical source, also the web edition
 │   ├── index.html          #   cover, preface, contents
 │   ├── book.css            #   screen styles
-│   ├── chapter-01..16.html
-│   └── appendix-a..d.html
+│   ├── chapter-01..17.html
+│   └── appendix-a..e.html
 ├── build/
 │   ├── coverfig.py         # cover figure from its equations
 │   ├── prerender.js        # LaTeX -> static KaTeX
@@ -92,24 +92,25 @@ One honest note: *optimally* tuned momentum (η = (2/(√λ_max+√λ_min))², �
 │   ├── print.css           # page geometry, running heads, break rules
 │   └── topdf.py            # render + metadata
 ├── tools/
-│   └── audit.py            # source consistency checks
+│   ├── audit.py            # source consistency checks (11 classes)
+│   ├── numbers.py          # recompute derived figures and check source
+│   └── renumber.py         # chapter-renumber utility (run-once, guarded)
 ├── figures/
 │   └── cover-figure.svg    # generated by build/coverfig.py
 ├── .github/workflows/
-│   ├── build.yml               # CI: audit + build PDF on every push
-│   └── pages.yml               # deploy web edition to GitHub Pages
+│   └── pages.yml               # build PDF + deploy both editions to GitHub Pages
 ├── Makefile
 ├── package.json            # katex, the three typefaces
 └── requirements.txt        # weasyprint, pypdf
 ```
 
-`.cache/` and `dist/` are intermediate/output directories and are git-ignored. The PDF is available as a CI build artifact from the Actions tab.
+`.cache/` and `dist/` are intermediate/output directories and are git-ignored. The PDF is deployed to GitHub Pages alongside the web edition.
 
 ---
 
 ## The audit
 
-`make audit` runs ten classes of check over the source. They exist because this book was drafted in batches, and every one of them caught a real error at some point:
+`make audit` runs eleven classes of check over the source. They exist because this book was drafted in batches, and every one of them caught a real error at some point:
 
 1. **Structure** — every chapter carries the same furniture: lead paragraph, derivation and worked-example boxes, closing section, readings, graded A/B/C exercises, a gate.
 2. **Links** — every internal `href` resolves.
@@ -117,10 +118,11 @@ One honest note: *optimally* tuned momentum (η = (2/(√λ_max+√λ_min))², �
 4. **Derivation references** — every "Derivation N.M" cited in a chapter is actually defined there.
 5. **Solution coverage** — every B and C exercise has a matching solution in Appendix D.
 6. **Prose** — chapter openings are not built from one template. This check exists because an early draft had twelve of sixteen chapters opening with the literal words "This chapter", which is invisible while writing and obvious while reading.
-7. **Back-references** — a chapter that says "Chapter N's X" is asserting that Chapter N contains X. Two such claims were false: Chapter 6 credited Chapter 1 with the matrix-multiply cost and Chapter 9 credited it with Bayes' rule, neither of which Chapter 1 contains.
+7. **Back-references** — a chapter that says "Chapter N's X" is asserting that Chapter N contains X.
 8. **Derivation bank** — every chapter is represented in Appendix A, no entry spans several chapters, and no chapter carries more bank entries than it has boxes to teach them in.
 9. **Lab anchoring** — every lab in Appendix C runs alongside the chapter of the derivation its acceptance criterion cites, rather than several chapters later.
 10. **Reading locators** — every reading annotation names where in the source to look: a section, a figure, a table, a page count. "How to read it" applied to an entire paper is not a locator.
+11. **Notation registry** — every symbol registered in `docs/NOTATION.md` appears in the chapters it claims to, and vice versa.
 
 `make numbers` is separate, and closes the gap `docs/NUMBERS.md` admits to: it recomputes the figures that follow from the reference hardware and the lifecycle model — ridge point, cache sizes, decode ceilings, MFU, lifetime costs, break-even — and checks the prose against them. It caught a decode ceiling in Appendix D that was a factor of two out and contradicted Chapter 13.
 
