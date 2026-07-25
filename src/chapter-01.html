@@ -25,12 +25,12 @@
 <header class="opener">
   <span class="eyebrow">Part I &middot; Foundations &middot; Chapter 1</span>
   <h1 class="ch">The Mathematical Toolkit</h1>
-  <p class="ch-blurb">Six small reflexes carry the entire book. None is difficult; all must become automatic before the machine learning begins.</p>
+  <p class="ch-blurb">Eight small reflexes carry the entire book. None is difficult; all must become automatic before the machine learning begins.</p>
 </header>
 
-<p class="lead">Six small pieces of mathematics carry this entire book. You almost certainly know all of them already. What you may not have is the ability to use them without thinking &mdash; and that, not knowledge, is what the chapters ahead will demand.</p>
+<p class="lead">Eight small pieces of mathematics carry this entire book. You almost certainly know all of them already. What you may not have is the ability to use them without thinking &mdash; and that, not knowledge, is what the chapters ahead will demand.</p>
 <p>A physicist solving a mechanics problem does not rederive the chain rule; it is furniture in the mind, and attention goes to the physics. The same must be true here. When Chapter 6 asks you to minimize a loss under a compute constraint, the minimization itself cannot be where you spend effort &mdash; the insight is in what the answer <em>means</em>. So we drill the furniture first. Read each section, work its drills until they are mechanical, and pass the gate at the end before opening Chapter 2. If the gate is trivial for you, skip this chapter entirely; it exists only to remove obstacles, not to teach anything you will be tested on for its own sake.</p>
-<p>The six reflexes are: manipulating <strong>logarithms and power laws</strong>; the <strong>algebra of variance</strong>; the <strong>binomial distribution and its normal approximation</strong>; <strong>constrained minimization by substitution</strong>; <strong>geometric series</strong>; and <strong>counting in bits</strong>. Each recurs a dozen times in what follows, and I flag the first major appearance of each as we go.</p>
+<p>The eight reflexes are: manipulating <strong>logarithms and power laws</strong>; the <strong>algebra of variance</strong>; the <strong>binomial distribution and its normal approximation</strong>; <strong>constrained minimization by substitution</strong>; <strong>geometric series</strong>; <strong>counting in bits</strong>; <strong>turning a conditional around</strong>; and <strong>counting operations</strong>. Each recurs a dozen times in what follows, and I flag the first major appearance of each as we go.</p>
 
 <h2>1.1 Logarithms and power laws</h2>
 <p>Nearly everything about scale &mdash; how loss falls as models grow, how error falls as data grows, how a probability compounds over a thousand steps &mdash; is a statement about power laws, and every power law is a straight line once you take logarithms. The reflex to build is moving between the two views without hesitation.</p>
@@ -80,6 +80,9 @@
 <h2>1.3 The binomial distribution and its normal approximation</h2>
 <p>Whenever something can go one of two ways &mdash; a residual block is traversed or skipped, a reasoning chain is right or wrong, a token is correct or not &mdash; and the trials are independent, the count of &ldquo;successes&rdquo; follows a binomial distribution. You need three things about it: its shape, its summary statistics, and how to approximate it with a bell curve when the counts get large.</p>
 <p>For \( n \) independent trials each succeeding with probability \( p \), the probability of exactly \( k \) successes is \( \binom{n}{k} p^k (1-p)^{n-k} \). The mean number of successes is \( np \) and the variance is \( np(1-p) \); take the square root of the latter for the standard deviation. When \( n \) is large, the distribution is well approximated by a normal curve with that same mean and standard deviation, and probabilities over a range of counts become areas under the bell &mdash; read off from the standard normal function \( \Phi \). Because the binomial is discrete and the normal continuous, we widen the target interval by half a unit at each end; this <em>continuity correction</em> is the little half-step that keeps the approximation honest.</p>
+<p>\( \Phi(z) \) is the probability that a standard normal variable falls below \( z \), and a symmetric interval \( [-z, +z] \) therefore holds \( 2\Phi(z) - 1 \). You will need a few of its values with no table to hand, so here they are.</p>
+<p><span class="keynum">\( \Phi \): &nbsp; 0.5 &rarr; 0.691 &nbsp;&middot;&nbsp; 1.0 &rarr; 0.841 &nbsp;&middot;&nbsp; 1.5 &rarr; 0.933 &nbsp;&middot;&nbsp; 2.0 &rarr; 0.977 &nbsp;&middot;&nbsp; 2.04 &rarr; 0.9793 &nbsp;&middot;&nbsp; 2.1 &rarr; 0.9821 &nbsp;&middot;&nbsp; 2.5 &rarr; 0.994 &nbsp;&middot;&nbsp; 3.0 &rarr; 0.9987</span></p>
+<p>Interpolate linearly between listed points; the error lands in the fourth decimal, below anything the arithmetic in this book can notice. The two awkward entries, \( \Phi(2.04) \) and \( \Phi(2.1) \), are spelled out because a residual-network result in Chapter 3 turns on them and you will be asked to reproduce it closed-book.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 1.2</span>
@@ -153,8 +156,55 @@
 </details>
 </div>
 
-<h2>1.7 What the chapter bought</h2>
-<p>That is the whole toolkit. Logarithms turn every power law into a straight line and every compounding factor into a step count. Variance algebra tells you how independent quantities accumulate &mdash; the single most reused fact in the book. The binomial and its normal approximation handle anything that can go one of two ways. Constrained minimization by substitution is the engine behind the field's most consequential result. Geometric series price anything that repeats forever at a discount. And counting in bits is the currency in which prediction, compression, and simplicity all turn out to be the same quantity.</p>
+<h2>1.7 Turning a conditional around</h2>
+<p>Two probabilities that look almost the same are not the same, and the gap between them is where a great deal of confident wrong reasoning about models lives. The chance that a leaked question is answered correctly is one number. The chance that a correct answer came from a leaked question is another. Getting from the first to the second is one line of algebra.</p>
+<p>Write \( P(H \mid E) \) for the probability of a hypothesis \( H \) given evidence \( E \). <strong>Bayes' rule</strong> turns one conditional into the other:</p>
+\[ P(H \mid E) = \frac{P(E \mid H)\,P(H)}{P(E)}, \]
+<p>and the denominator is just the total probability of the evidence, assembled from every way it could arise: \( P(E) = \sum_i P(E \mid H_i)P(H_i) \) over a set of hypotheses that covers all the cases. In this book the sum almost always has two terms, and the whole calculation fits on one line.</p>
+<p>Before working an example, notice what the formula says about magnitudes, because the surprise it produces is the reason the reflex is worth installing. If a hypothesis is rare, then even evidence that follows from it almost certainly can leave it unlikely &mdash; the small \( P(H) \) on top is not rescued by a large \( P(E \mid H) \). Most people's instinct runs the other way, and reads strong evidence as a strong conclusion regardless of how rare the cause was to begin with.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 1.6</span>
+<p class="title">Which successes were memory</p>
+<p>A quarter of a test set was seen during training and those items are always answered correctly; on the remaining three quarters the model answers correctly with probability \( 0.6 \). A question is answered correctly. What is the probability it was one of the seen ones?</p>
+<p>Take \( H \) to be &ldquo;this item was seen&rdquo;, so \( P(H) = 0.25 \) and \( P(E \mid H) = 1 \). For an unseen item, \( P(E \mid \text{not } H) = 0.6 \). Assemble the denominator first:</p>
+\[ P(E) = 1 \times 0.25 + 0.6 \times 0.75 = 0.25 + 0.45 = 0.70. \]
+<p>Then Bayes' rule gives \( P(H \mid E) = (1 \times 0.25)/0.70 = 0.357 \). Better than a third of this model's correct answers are recall rather than skill &mdash; and note that the observed accuracy, \( 0.70 \), fell out of the denominator on the way. Chapter 8 runs this calculation backwards, inferring the quarter from the seventy percent, and the algebra is the same three symbols.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 1.7</span>
+<p>(a) One tenth of a benchmark leaked and is always answered correctly; the clean accuracy is \( 0.5 \). Give the observed accuracy, and the probability that a correct answer was leaked. &nbsp; (b) A rare failure mode occurs in one run in a thousand. A detector fires on every genuine occurrence and also on 2% of healthy runs. The detector fires. What is the probability the failure is real?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( P(E) = 0.1 + 0.5(0.9) = 0.55 \); \( P(H \mid E) = 0.1/0.55 = 0.18 \). &nbsp; (b) \( P(E) = 1(0.001) + 0.02(0.999) = 0.001 + 0.020 = 0.021 \), so \( P(H \mid E) = 0.001/0.021 = 0.048 \). A detector that never misses still leaves you wrong nineteen times in twenty when it fires, because the thing it looks for is rare. This is the magnitude surprise above, in its usual costume.</p>
+</details>
+</div>
+
+<h2>1.8 Counting operations</h2>
+<p>The last reflex is the cheapest to state and the most used in Part III: knowing what a computation costs before you run it. Everything expensive in this book is a matrix product, and a matrix product has exactly one cost formula.</p>
+<p>The <strong>matrix-multiply primitive</strong> is the whole of it. Multiplying an \( a \times b \) matrix by a \( b \times c \) matrix produces \( ac \) entries, each a sum of \( b \) products, so the cost is</p>
+\[ a\,b\,c \quad \text{multiply--accumulate operations,} \]
+<p>where a <em>multiply&ndash;accumulate</em> is one multiplication and one addition taken together, as the hardware performs it. Count these, not multiplications and additions separately, and the arithmetic in later chapters will match the figures the field quotes. When one of the three dimensions is 1 &mdash; a matrix meeting a single vector &mdash; the formula still holds and the cost collapses to \( ab \), a fact Chapter 10 builds an entire economics on.</p>
+<p>One corollary carries more weight than the rule itself. Every weight in a matrix is touched exactly once per input the matrix processes, so <strong>a layer of \( P \) weights costs about \( P \) multiply&ndash;accumulates per input</strong>. Cost per input is therefore a statement about parameter count, and nothing else &mdash; which is why so much of the field's arithmetic can be done knowing only how big a model is.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 1.7</span>
+<p class="title">The cost of one feed-forward block</p>
+<p>A layer takes a vector of width \( 512 \), maps it up to \( 2048 \), and maps it back down to \( 512 \). What does it cost at one position, and how does that compare with its parameter count?</p>
+<p>Up: a \( 1 \times 512 \) vector against a \( 512 \times 2048 \) matrix, so \( 1 \times 512 \times 2048 = 1{,}048{,}576 \) multiply&ndash;accumulates. Down: \( 1 \times 2048 \times 512 \), the same again. The block costs \( 2{,}097{,}152 \) operations per position, about \( 2.1 \) million.</p>
+<p>Its weights number \( 512 \times 2048 + 2048 \times 512 = 2{,}097{,}152 \) &mdash; the same figure, as the corollary promised. Write the width as \( d \) and the middle as \( 4d \) and this is \( 8d^2 \) either way, which is the expression Chapter 5 balances against the cost of attention.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 1.8</span>
+<p>(a) Give the multiply&ndash;accumulate cost of multiplying a \( 128 \times 512 \) matrix by a \( 512 \times 64 \) matrix. &nbsp; (b) A model holds \( 7 \times 10^9 \) weights. Roughly how many multiply&ndash;accumulates does it perform to process one input? &nbsp; (c) Two square matrices of side \( n \) are multiplied. How does the cost grow when \( n \) doubles?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 128 \times 512 \times 64 = 4{,}194{,}304 \), about \( 4.2 \) million. &nbsp; (b) About \( 7 \times 10^9 \), one per weight. &nbsp; (c) The cost is \( n^3 \), so doubling \( n \) multiplies it by eight.</p>
+</details>
+</div>
+
+<h2>1.9 What the chapter bought</h2>
+<p>That is the whole toolkit. Logarithms turn every power law into a straight line and every compounding factor into a step count. Variance algebra tells you how independent quantities accumulate &mdash; the single most reused fact in the book. The binomial and its normal approximation handle anything that can go one of two ways. Constrained minimization by substitution is the engine behind the field's most consequential result. Geometric series price anything that repeats forever at a discount. Counting in bits is the currency in which prediction, compression, and simplicity all turn out to be the same quantity. Turning a conditional around separates what a number says from what it is usually taken to say. And counting operations converts a description of a model into a bill.</p>
 <p>You will not meet these again as objects of study. From here they are furniture, assumed silently in every derivation, and the hours spent making them automatic now are repaid many times over. Chapter 2 puts the first of them to work immediately, on the question that held deep learning back for two decades: not what a network can represent, but whether gradient descent can travel to it.</p>
 
 <h2>Exercises</h2>
@@ -170,6 +220,8 @@
 <li>Minimize \( 3N^{-1} + D^{-1} \) subject to \( ND = 48 \).</li>
 <li>With \( \gamma = 0.99 \), what is the present value of receiving 1 unit at every future step starting next step?</li>
 <li>How many bits specify one microstate among \( \binom{10}{5} = 252 \) equally likely ones?</li>
+<li>A fifth of a test set leaked and is always answered correctly; clean accuracy is \( 0.4 \). Give the observed accuracy and the probability that a correct answer was leaked.</li>
+<li>Give the multiply&ndash;accumulate cost of a \( 256 \times 1024 \) matrix against a \( 1024 \times 256 \) one, and state its parameter count.</li>
 </ol>
 </div>
 
@@ -192,7 +244,7 @@
 
 <div class="gate">
 <span class="label">Gate 1 &middot; Pass before Chapter 2</span>
-<p>Closed book, forty minutes. Attempt all seven A-set exercises and B-1 through B-3. You pass at six of ten fully correct. If you fall short, the fix is never to reread &mdash; it is to redo the drills in the section whose reflex failed, then retake the gate. These six reflexes do not appear again as objects of study; from here they are simply assumed, and every hour spent making them automatic now is repaid tenfold in the chapters ahead.</p>
+<p>Closed book, fifty minutes. Attempt all nine A-set exercises and B-1 through B-4. You pass at eight of thirteen fully correct. If you fall short, the fix is never to reread &mdash; it is to redo the drills in the section whose reflex failed, then retake the gate. These eight reflexes do not appear again as objects of study; from here they are simply assumed, and every hour spent making them automatic now is repaid tenfold in the chapters ahead.</p>
 </div>
 
 <div class="readings">

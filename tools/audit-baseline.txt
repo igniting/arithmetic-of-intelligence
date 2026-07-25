@@ -10,12 +10,10 @@
 # lines to make a new failure go away -- that is the one thing this file is not
 # for.
 #
-# WP1  back-references   3
+# WP1  back-references   1  (2 struck: Chapter 1 now contains both)
 # WP5  reading locators  31
 # WP6  bank + labs       7
-chapter 05 credits Chapter 1 with 'matrix-multiply primitive' — no such wording there
 chapter 06 credits Chapter 13 with 'DPO collapse uses' — no such wording there
-chapter 08 credits Chapter 1 with 'Bayes flip' — no such wording there
 chapter 9: 6 bank entries but only 5 derivation/worked boxes to teach them
 chapter 14 has no entry in the derivation bank
 chapter 15 has no entry in the derivation bank
