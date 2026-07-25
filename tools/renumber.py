@@ -114,6 +114,11 @@ def renumber(text, own_chapter):
 
 
 def main():
+    # This has already been run. It is kept as the record of what WP1 did to
+    # the numbering; running it again would shift the book a second time.
+    if (ROOT / "src" / "chapter-17.html").exists():
+        sys.exit("already renumbered: chapter-17.html exists. Refusing to run again.")
+
     # Rename files first, descending, so nothing is overwritten.
     for n in range(HI, LO - 1, -1):
         src = ROOT / "src" / f"chapter-{n:02d}.html"
