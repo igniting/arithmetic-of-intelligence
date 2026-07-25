@@ -23,6 +23,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install WeasyPrint system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 \
+                                  libcairo2 libgdk-pixbuf-2.0-0
+
+      - name: Build PDF
+        run: make install && make pdf
+
+      - name: Stage site
+        run: |
+          cp dist/The-Arithmetic-of-Intelligence.pdf src/
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

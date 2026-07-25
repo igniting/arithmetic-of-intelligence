@@ -131,5 +131,5 @@ drafting and extracting it was worth the ten minutes.
 
 **The audit ships with the repo.**
 `tools/audit.py` is not scaffolding left behind; it is the thing that keeps a
-batch-written book coherent, and every one of its six checks caught a real error.
+batch-written book coherent, and every one of its checks caught a real error.
 CI runs it before building.

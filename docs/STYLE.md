@@ -125,7 +125,7 @@ citation. Examples in use:
 ## Checks before committing
 
 ```bash
-make audit          # six structural checks, exits non-zero on failure
+make audit          # structural checks, exits non-zero on failure
 make pdf            # full build, ~100s
 ```
 

@@ -402,15 +402,15 @@ so where a reader will look for it.
 
 ## Still open
 
-1. **The index**, per above — a build task against `.cache/book-print.html`.
+1. **The index** — a build task against `.cache/book-print.html`. Attempted
+   and reverted; WeasyPrint's `target-counter` does not resolve reliably for
+   the volume of anchors an index requires.
 2. **Costing normalization**, and **positional encoding / context extension**,
    both deferred from WP4 item 4.
-3. **The Chapter 6 perplexity row** in `docs/NUMBERS.md`, flagged there: a
-   result the ledger commits to and the text does not yet contain.
-4. **Verifying reading locators against the linked versions.** The named
+3. **Verifying reading locators against the linked versions.** The named
    elements are stable and were written from knowledge of the papers, but no
    pass has been made with all 76 sources open.
-5. **A close prose read.** `docs/HISTORY.md` §8 notes that the original prose
+4. **A close prose read.** `docs/HISTORY.md` §8 notes that the original prose
    audit measured patterns across the whole book and read only portions
    closely. This revision added roughly 9,000 words; they have been checked
    for arithmetic and cross-reference, not read aloud.

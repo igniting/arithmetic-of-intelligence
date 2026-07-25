@@ -126,6 +126,7 @@ out: the √κ result, drawn rather than asserted.
 
 ## 8. What is still unfinished
 
-Listed in `AGENTS.md` under **Open items**. Briefly: no licence, no index, two
-places wanting a diagram, and a prose audit that measured patterns across the
-whole book but read only portions closely.
+Listed in `docs/SECOND-EDITION-PLAN.md` under **Still open**. Briefly: no
+index, costing normalization and positional encoding, a Chapter 6 perplexity
+row, verifying reading locators against linked versions, and a close prose read
+of the ~9,000 words added in the revision.

@@ -111,6 +111,14 @@
 <p>Logits are \( z_1 = 2, z_2 = 0 \). At \( T = 1 \), the probability of token 1 is \( \sigma(2) = 1/(1+e^{-2}) = 1/(1.135) = 0.881 \). At \( T = 0.5 \), the logits double to \( 4, 0 \), so \( \sigma(4) = 1/(1+e^{-4}) = 1/(1.018) = 0.982 \): colder sampling has sharpened the lead. As \( T \to 0 \) the distribution tends to the argmax; as \( T \to \infty \) it tends to uniform. At no finite positive \( T \) does token 2 overtake token 1 &mdash; monotonicity forbids it.</p>
 </div>
 
+<div class="box worked">
+<span class="label">Worked Example 6.3</span>
+<p class="title">A perplexity drop that sounds enormous and is half a bit</p>
+<p>A language model improves from perplexity 114.5 to perplexity 78.4 &mdash; a 31% relative reduction. How large is that gain in bits per token?</p>
+<p>Perplexity is \( 2^H \) where \( H \) is cross-entropy in bits, so \( H = \log_2(\text{perplexity}) \). Before: \( \log_2(114.5) = 6.84 \) bits/token. After: \( \log_2(78.4) = 6.29 \) bits/token. The improvement is \( 6.84 - 6.29 = 0.55 \) bits per token &mdash; barely half a bit.</p>
+<p>The lesson: perplexity is exponential in bits. A gain that sounds dramatic in the exponential unit can be modest in the linear unit that file sizes, bandwidth budgets, and the compression arguments of Chapter 10 are denominated in. Whenever someone reports a perplexity improvement, convert it to bits before deciding whether to be impressed.</p>
+</div>
+
 <h2>6.5 The reversal trick, and what it reveals</h2>
 <p>Before attention, sequence-to-sequence models used a recurrent encoder to read the source and a recurrent decoder to write the target. A curious preprocessing trick helped: reversing the source sequence before encoding. Why should reading a sentence backward help translate it? The answer is one of the most instructive small calculations in the book, because it distinguishes two things students routinely conflate &mdash; optimization and representation.</p>
 

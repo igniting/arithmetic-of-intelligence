@@ -12,12 +12,6 @@ derived in the text.
 hardware and the lifecycle model, and checks the source against them. It does
 not cover the whole table; rows outside its scope are still yours to grep.
 
-One row is under revision — see `docs/SECOND-EDITION-PLAN.md`:
-
-- The **Chapter 6 perplexity row** records a result that appears nowhere in
-  `src/`. It is kept here as a commitment to write it, not as a record of the
-  text as it stands. Flagged below.
-
 ---
 
 ## Reference hardware (Part III)
@@ -82,7 +76,7 @@ Introduced once in Chapter 11 and treated as established in 12, 13 and 17.
 | attention/feed-forward crossover | **n = 4d** |
 | reversed lag at position j | 2j − 1 |
 | mean reversed lag | **exactly n** (unchanged) |
-| perplexity 114.5 → 78.4 | **0.55 bits/token** — ⚠ not yet in the text |
+| perplexity 114.5 → 78.4 | **0.55 bits/token** |
 
 ## Chapter 7 — The Economics of Scale
 

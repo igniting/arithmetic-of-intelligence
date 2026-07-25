@@ -146,3 +146,7 @@ h1.title{font-size:clamp(38px,7vw,62px);margin:0 0 18px}
 .cover-author{margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);
   font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink)}
+.pdf-link{display:inline-block;margin-top:20px;padding:10px 20px;
+  font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.06em;
+  color:var(--blue);border:1.5px solid var(--blue);border-radius:3px}
+.pdf-link:hover{background:var(--blue);color:#fff;text-decoration:none}
