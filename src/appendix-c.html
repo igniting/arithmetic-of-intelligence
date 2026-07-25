@@ -36,7 +36,7 @@
 </header>
 
 <p class="lead">Reading a derivation convinces you. Writing code that reproduces its number to three decimal places convinces you differently, and more permanently.</p>
-<p>These labs run alongside Part III, roughly one per chapter from Chapter 11 onward, though several draw on Part II material. Each takes four to six hours. The rule that makes them worth the time: <strong>predict the number before you run anything.</strong> Write the expected value in your notebook, then run the code. When they disagree, one of the two is wrong, and finding out which is where the learning happens &mdash; more often than you would expect, it is the code.</p>
+<p>Each lab is anchored to the chapter whose derivation supplies its acceptance number, so they cluster where Part III does its densest work rather than spreading one to a chapter. Each takes four to six hours. The rule that makes them worth the time: <strong>predict the number before you run anything.</strong> Write the expected value in your notebook, then run the code. When they disagree, one of the two is wrong, and finding out which is where the learning happens &mdash; more often than you would expect, it is the code.</p>
 <p>Scaffolding: a minimal transformer implementation such as <a href="https://github.com/karpathy/nanoGPT">nanoGPT</a> and the <a href="https://karpathy.ai/zero-to-hero.html">Zero to Hero</a> lecture series cover Labs 1 through 4 comfortably. <a href="https://github.com/karpathy/minbpe">minbpe</a> is a reference for Lab 1. From Lab 6, a preference-training library such as <a href="https://github.com/huggingface/trl">TRL</a> is permitted, but write the loss function yourself first.</p>
 
 <div class="lab">
@@ -67,7 +67,7 @@
 </div>
 
 <div class="lab">
-<span class="lnum">Lab 4 &middot; alongside Chapter 13</span>
+<span class="lnum">Lab 4 &middot; alongside Chapter 11</span>
 <h3>A key&ndash;value cache</h3>
 <p>Add incremental decoding with a KV cache to your Lab 3 model, so that generating token \( t+1 \) reuses the keys and values computed for tokens \( 1 \ldots t \).</p>
 <div class="crit"><strong>Acceptance</strong>
@@ -76,7 +76,7 @@
 </div>
 
 <div class="lab">
-<span class="lnum">Lab 5 &middot; alongside Chapter 14</span>
+<span class="lnum">Lab 5 &middot; alongside Chapter 13</span>
 <h3>Low-rank adaptation, from scratch</h3>
 <p>Implement a low-rank adapter on one weight matrix of your model: freeze the original, add a trainable \( BA \) product of rank \( r \), and train only the adapter.</p>
 <div class="crit"><strong>Acceptance</strong>
@@ -94,7 +94,7 @@
 </div>
 
 <div class="lab">
-<span class="lnum">Lab 7 &middot; alongside Chapter 16</span>
+<span class="lnum">Lab 7 &middot; alongside Chapter 13</span>
 <h3>Post-training quantization</h3>
 <p>Quantize your Lab 3 model's weights to 8 bits with a uniform quantizer, and measure both the weight error and the effect on model quality.</p>
 <div class="crit"><strong>Acceptance</strong>
@@ -103,7 +103,7 @@
 </div>
 
 <div class="lab">
-<span class="lnum">Lab 8 &middot; alongside Chapter 17</span>
+<span class="lnum">Lab 8 &middot; alongside Chapter 12</span>
 <h3>Speculative decoding</h3>
 <p>Train or obtain a smaller draft model compatible with your Lab 3 model's tokenizer. Implement draft-and-verify decoding with the rejection rule of Derivation 12.2.</p>
 <div class="crit"><strong>Acceptance</strong>

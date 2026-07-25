@@ -82,7 +82,7 @@
 <div class="box trap">
 <span class="label">T9 &middot; The unnamed budget</span>
 <p><strong>Symptom:</strong> &ldquo;this makes it faster&rdquo; or &ldquo;this makes it smaller,&rdquo; with no resource specified. Low-rank adaptation saves optimizer state, not training arithmetic. Grouped-query attention saves cache, not weight reads. A mixture-of-experts saves per-token compute, not memory.</p>
-<p><strong>Diagnostic:</strong> refuse to evaluate any efficiency claim until the budget is named &mdash; weights, optimizer state, activations, bandwidth, training operations, serving operations, or human preference data. Most confused arguments in this field dissolve at this question.</p>
+<p><strong>Diagnostic:</strong> refuse to evaluate any efficiency claim until the budget is named. There are four: training operations, serving operations, memory bytes and bandwidth &mdash; which splits into weights, optimizer state and activations &mdash; and human preference data. Most confused arguments in this field dissolve at this question.</p>
 </div>
 
 <div class="box trap">

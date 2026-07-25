@@ -88,6 +88,16 @@
 \[ D_{\mathrm{KL}} = \ln\frac{\sigma_p}{\sigma_q} + \frac{\sigma_q^2 + \mu^2}{2\sigma_p^2} - \frac{1}{2} \quad\text{nats}. \]
 <p>Three readings of this formula matter more than the formula itself. When the posterior equals the prior (\( \sigma_q = \sigma_p = 1, \mu = 0 \)), the cost is exactly zero: a weight you have learned nothing about is free. As \( \sigma_q \to 0 \) the first term diverges: <em>infinite precision costs infinite bits</em>. And a weight the network is content to leave noisy &mdash; large \( \sigma_q \) &mdash; is a <em>cheap</em> weight.</p>
 
+<div class="box worked">
+<span class="label">Worked Example 10.4</span>
+<p class="title">Three weights, three prices</p>
+<p>Take a shared prior of \( \sigma_p = 1 \) and price three weights the network might want.</p>
+<p><em>One it has learned nothing about</em> (\( \mu = 0 \), \( \sigma_q = 1 \)): \( \ln 1 + \frac{1 + 0}{2} - \frac12 = 0 \) nats. Free, exactly.</p>
+<p><em>One it is mildly confident about</em> (\( \mu = 0.5 \), \( \sigma_q = 0.5 \)): \( \ln 2 + \frac{0.25 + 0.25}{2} - \frac12 = 0.693 + 0.25 - 0.5 = 0.443 \) nats.</p>
+<p><em>One it insists on</em> (\( \mu = 0.5 \), \( \sigma_q = 0.01 \)): \( \ln 100 + \frac{0.0001 + 0.25}{2} - \frac12 = 4.605 + 0.125 - 0.5 = 4.23 \) nats &mdash; nearly ten times the mild one, for a weight in the same place with the same mean.</p>
+<p>The whole bill is in the first term, \( \ln(\sigma_p/\sigma_q) \), and it diverges as \( \sigma_q \to 0 \). Precision, not magnitude, is what a description-length penalty charges for, which is why such a penalty produces a model that is confident about a few things and vague about most.</p>
+</div>
+
 <div class="box trap">
 <span class="label">Trap &middot; T5 &middot; direction reversal</span>
 <p>Students routinely get this backwards, assuming a noisy weight must be costly. The reverse is true, and the reversal <em>is</em> the mechanism: because precision costs bits, a network under a description-length penalty buys precision only where precision buys accuracy, and lets every other weight stay blurry. That is how such a penalty produces simple models &mdash; not by removing weights, but by declining to pay for their exactness.</p>
@@ -127,12 +137,29 @@
 <p>A short but sharp idea. Consider the set \( M \) of all 10,000-bit strings containing exactly 5,000 ones. Its size is \( \binom{10000}{5000} \), and by the approximation of Chapter 1, \( \log_2\binom{2n}{n} \approx 2n - \tfrac12\log_2(\pi n) \), which here gives about <span class="keynum">9,993</span> bits: specifying a member takes nearly the full 10,000 bits, so a typical member is essentially incompressible.</p>
 <p>Now take the alternating string \( 0101\ldots01 \). It belongs to \( M \) &mdash; it has exactly 5,000 ones. Yet its description length is tiny: &ldquo;print 01 five thousand times&rdquo; is a few dozen bits. Its <em>randomness deficiency</em> &mdash; the gap between the bits a typical member needs and the bits this member actually needs &mdash; is nearly maximal, about 9,993 bits. The string satisfies every constraint the model imposes and is nonetheless an outrageous thing for that model to produce. Membership in a model is not typicality under it, and conflating the two is how one fails to notice a black swan.</p>
 
+<div class="box worked">
+<span class="label">Worked Example 10.5</span>
+<p class="title">A member that no model would produce</p>
+<p>Take \( M \), the set of 10,000-bit strings with exactly 5,000 ones, and compare two of its members.</p>
+<p>A typical member: by Chapter 1's approximation, \( \log_2\binom{10000}{5000} \approx 2n - \tfrac12\log_2(\pi n) \) with \( n = 5000 \), giving \( 10{,}000 - \tfrac12\log_2(15{,}708) = 10{,}000 - 6.97 \approx 9{,}993 \) bits. Specifying it takes essentially the full 10,000 bits; it is incompressible.</p>
+<p>The alternating string \( 0101\ldots01 \): also in \( M \), and describable in a few dozen bits. Its randomness deficiency &mdash; what a typical member costs minus what this one costs &mdash; is about \( 9{,}993 \) bits, very nearly the maximum possible.</p>
+<p>Both satisfy every constraint the model imposes. One is what the model is about; the other is an outrage the model cannot rule out. Membership is not typicality, and a model that only checks membership has no way to notice the difference.</p>
+</div>
+
 <h2>10.6 Two puzzles the framework dissolves</h2>
-<p><strong>Grokking.</strong> A network trained on a rule-like task sometimes memorizes first and only much later &mdash; abruptly &mdash; discovers the rule that generalizes. In code-length terms this is unmysterious. Suppose memorizing 1,000 examples at 10 bits each costs 10,000 bits, while the general rule costs 500 bits: the transition is a twentyfold compression. Both solutions sit at zero training error, so <em>the training loss is silent about the transition</em> &mdash; but the description length is not, and neither is the test accuracy. Delayed generalization is a search finding the short code late.</p>
+<p><strong>Grokking.</strong> A network trained on a rule-like task sometimes memorizes first and only much later &mdash; abruptly &mdash; discovers the rule that generalizes. In code-length terms this is unmysterious. The arithmetic is in the box below. Both solutions sit at zero training error, so <em>the training loss is silent about the transition</em> &mdash; but the description length is not, and neither is the test accuracy. Delayed generalization is a search finding the short code late.</p>
+<div class="box worked">
+<span class="label">Worked Example 10.6</span>
+<p class="title">Grokking, in bits</p>
+<p>A network memorizes 1,000 training examples at 10 bits each: \( 10{,}000 \) bits of model. Later it finds the rule that generates them, which costs \( 500 \) bits. Both encodings leave zero residual &mdash; both fit the training data exactly &mdash; so the training loss cannot tell them apart, and does not.</p>
+\[ \frac{10{,}000}{500} = 20\times \ \text{compression, at unchanged training error.} \]
+<p>The description length fell by a factor of twenty while the quantity being optimized did not move at all. That is why the transition looks sudden and unmotivated on a loss curve and is neither: the search was always running, over a space in which short codes are rare and therefore found late.</p>
+</div>
+
 <p><strong>Double descent.</strong> Classical wisdom says test error traces a U as model size grows. Modern practice sees it fall, rise to a peak, and fall again past the point where the model can interpolate the training data. The peak is quantifiable. For least squares with \( p \) parameters and \( n \) samples (\( p < n-1 \)) at noise variance \( \sigma^2 \), the expected excess test risk is \( \sigma^2 p/(n-p-1) \) &mdash; take this as given. As \( p \to n-1 \) the denominator vanishes and the risk diverges: at the interpolation threshold there is effectively one interpolating solution, and it is maximally sensitive to noise. Past the threshold many interpolating solutions exist, an optimizer biased toward small norm can select a simple one, and the risk falls again.</p>
 
 <div class="box worked">
-<span class="label">Worked Example 10.4</span>
+<span class="label">Worked Example 10.7</span>
 <p class="title">The approach to the threshold</p>
 <p>With \( n = 100 \) samples and \( \sigma^2 = 1 \), compare the excess risk at \( p = 50 \) and \( p = 90 \). At \( p = 50 \): \( 50/(100-50-1) = 50/49 = 1.02 \). At \( p = 90 \): \( 90/(100-90-1) = 90/9 = 10 \). The ratio is <span class="keynum">9.8</span>. Adding parameters near the threshold is not mildly harmful; it is catastrophic &mdash; and yet pushing further past it recovers.</p>
 </div>
@@ -143,7 +170,7 @@
 <p>Three properties follow immediately. By Kraft, \( \Upsilon \le 1 \) for any agent. An agent competent only in very complex environments scores near zero, because \( 2^{-K} \) decimates them: <em>Occam is built into the definition of intelligence itself.</em> And adding one bit to every environment's complexity halves \( \Upsilon \) exactly.</p>
 
 <div class="box worked">
-<span class="label">Worked Example 10.5</span>
+<span class="label">Worked Example 10.8</span>
 <p class="title">Scoring an agent, and a caution about rewards</p>
 <p>An agent scores \( V = 0.5, 0.9, 0.3 \) in environments of complexity \( K = 1, 2, 3 \) bits. Then \( \Upsilon = \tfrac12(0.5) + \tfrac14(0.9) + \tfrac18(0.3) = 0.25 + 0.225 + 0.0375 = \) <span class="keynum">0.51</span>.</p>
 <p>A related calculation, using Chapter 1's geometric series, prices a temptation. An agent discounting the future at \( \gamma = 0.95 \) values a perpetual per-step reward \( r \) at \( \gamma r/(1-\gamma) = 19r \). This beats a one-time reward of 1 whenever \( r > 1/19 = \) <span class="keynum">0.053</span>. A trickle worth barely five percent of the one-off prize is already preferable &mdash; which is why an agent able to seize its own reward channel finds doing so overwhelmingly attractive, and why the reward source must be kept outside the agent's control.</p>
@@ -169,7 +196,9 @@
 <li><strong>The length prior in action.</strong> Four consistent programs have lengths 6, 9, 9, and 14 bits, predicting the next symbol as A, B, A, and B. Compute the posterior probability of A. Then state the general rule relating a program's extra length to its share of belief, and prove it in one line.</li>
 <li><strong>Approaching the threshold.</strong> With \( n = 200 \), \( \sigma^2 = 1 \), tabulate the excess risk at \( p = 100, 150, 190, 195 \). Describe the trend and say what it implies about model sizes near \( p \approx n \).</li>
 <li><strong>Precision is what costs.</strong> Using the Gaussian coding formula, compute the cost of a weight at \( \sigma_p = 1 \) with (a) \( \sigma_q = 0.5, \mu = 0 \); (b) \( \sigma_q = 0.05, \mu = 0 \). Explain what the comparison says about which weights a description-length penalty leaves imprecise.</li>
-</ol>
+
+<li><strong>The same corpus, three tokenizers.</strong> A model reaches 1.9 bits per token at \( \gamma = 4.5 \), a second 1.5 at \( \gamma = 3.2 \), a third 2.4 at \( \gamma = 6.0 \). Rank them as compressors of the same file, give each one's compressed size for 5 GB of text, and state which comparison a per-token leaderboard would get wrong.</li>
+<li><strong>What a bit of precision is worth.</strong> Using the Gaussian coding formula at \( \sigma_p = 1 \), \( \mu = 0 \), tabulate the cost of a weight at \( \sigma_q = 1, 0.5, 0.25, 0.1, 0.01 \). Show that each halving of \( \sigma_q \) adds \( \ln 2 \) nats once \( \sigma_q \) is small, and explain in one sentence why that makes precision a <em>linear</em> cost in bits of precision rather than a diminishing one.</li></ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>

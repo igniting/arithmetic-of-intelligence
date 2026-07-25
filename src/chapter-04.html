@@ -166,7 +166,9 @@
 <li><strong>The path ensemble at 100 blocks.</strong> For \( L = 100 \) residual blocks with each block traversed at probability \( \tfrac12 \), estimate the fraction of paths whose length lies between 40 and 60 inclusive, using the normal approximation with continuity correction.</li>
 <li><strong>Where the saving lives.</strong> Derive the general bottleneck-to-plain MAC ratio as a function of the compression factor \( c \), taking the plain design as two \( 3\times3 \) convolutions at \( C \) channels and the bottleneck as \( 1\times1 \) down, \( 3\times3 \) narrow, \( 1\times1 \) up. Evaluate at \( c = 2 \) and \( c = 4 \), and say what happens as \( c \) grows large.</li>
 <li><strong>Reach versus depth.</strong> You must cover a \( 255\times255 \) receptive field with \( 3\times3 \) kernels. Give the number of dilated layers required, the number of undilated layers required, and the ratio of a single equivalent kernel's weights to the dilated stack's.</li>
-</ol>
+
+<li><strong>Drift, and where normalization goes.</strong> A 60-block residual stack adds, at one output coordinate, an independent zero-mean perturbation of variance \( 0.02 \) per block. Give the accumulated standard deviation. Then suppose normalization is placed on the <em>skip</em> path instead of inside the branch, rescaling the running signal by \( 1/\sqrt{\ell} \) after block \( \ell \). Using Derivation 4.1, say what that does to the surviving identity term, and why the drift argument does not justify it.</li>
+<li><strong>The cost of one design decision.</strong> A layer must map 256 channels to 256 over a \( 7\times7 \) receptive field at one spatial position. Cost it three ways: a single \( 7\times7 \) convolution; three stacked \( 3\times3 \) convolutions; and a bottleneck at \( c = 4 \) wrapping a single \( 3\times3 \). Give parameters and multiply&ndash;accumulates for each, rank them, and say what each buys besides its number.</li></ol>
 </div>
 <div class="exset">
 <p class="exgrade">C &middot; Challenge</p>

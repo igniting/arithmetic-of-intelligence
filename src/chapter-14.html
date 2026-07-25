@@ -52,7 +52,7 @@
 </div>
 
 <h2>14.2 From comparisons to a reward</h2>
-<p>People are unreliable at scoring a response in isolation and reliable at comparing two. So the data are preference pairs: given a prompt, response \( y_w \) was preferred to \( y_l \). The standard model of such comparisons assumes an underlying scalar reward \( r \) and sets the probability of the observed preference to a logistic function of the reward difference:</p>
+<p>People are unreliable at scoring a response in isolation and reliable at comparing two. So the data are preference pairs: given a prompt, response \( y_w \) was preferred to \( y_l \). The standard model of such comparisons &mdash; the <strong>Bradley&ndash;Terry</strong> model &mdash; assumes an underlying scalar reward \( r \) and sets the probability of the observed preference to a logistic function of the reward difference:</p>
 \[ P(y_w \succ y_l) = \sigma\bigl(r(y_w) - r(y_l)\bigr). \]
 <p>Fitting \( r \) means minimizing \( -\log\sigma(r_w - r_l) \) over the dataset. One structural fact matters enormously and is easy to miss.</p>
 
@@ -67,7 +67,7 @@
 <p>Given a reward, one could simply maximize it. One should not. A policy that maximizes a learned reward without constraint will find the regions where the reward model is wrong and exploit them &mdash; the engineering face of the reward-seizing argument from Chapter 10. The remedy is a leash: penalize divergence from the pretrained reference policy \( \pi_{\text{ref}} \). The objective becomes</p>
 \[ \max_{\pi}\ \mathbb{E}_{y\sim\pi}\bigl[r(x,y)\bigr] - \beta\,\mathrm{KL}\bigl(\pi \,\|\, \pi_{\text{ref}}\bigr), \]
 <p>with \( \beta \) setting how tight the leash is. This objective &mdash; reward minus a scaled divergence from the reference &mdash; is the target for the rest of the chapter. <em>Every method below optimizes this same objective; they differ only in how.</em></p>
-<p>The classical optimizer is a policy-gradient method with a clipped surrogate. Writing \( \rho = \pi(y)/\pi_{\text{old}}(y) \) for the probability ratio against the policy that generated the data and \( A \) for the advantage, the surrogate is</p>
+<p>The classical optimizer is a policy-gradient method with a clipped surrogate, <strong>proximal policy optimization</strong> or PPO. Writing \( \rho = \pi(y)/\pi_{\text{old}}(y) \) for the probability ratio against the policy that generated the data and \( A \) for the advantage, the surrogate is</p>
 \[ \min\bigl(\rho A,\ \operatorname{clip}(\rho,\,1-\epsilon,\,1+\epsilon)\,A\bigr). \]
 <p>The \( \min \) makes the objective <em>pessimistic</em>: it always takes the less favorable of the clipped and unclipped values, in both directions.</p>
 
@@ -113,7 +113,7 @@
 \[ r(x,y_w) - r(x,y_l) = \beta\log\frac{\pi^*(y_w)}{\pi_{\text{ref}}(y_w)} - \beta\log\frac{\pi^*(y_l)}{\pi_{\text{ref}}(y_l)} + \underbrace{\beta\log Z(x) - \beta\log Z(x)}_{=\ 0}. \]
 <p>The intractable term cancels exactly, because it is the same for both responses. Putting this difference into the Bradley&ndash;Terry loss gives a loss over the policy alone:</p>
 \[ \mathcal{L} = -\log\sigma\!\left(\beta\log\frac{\pi(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right). \]
-<p>No reward model. No sampling loop. No value network. A supervised loss on preference pairs that optimizes the same KL-regularized objective. The whole apparatus collapsed because an intractable constant was identical on both sides of a difference &mdash; the same cancellation-by-differencing that made Section 14.2's rewards identifiable only up to a constant.</p>
+<p>No reward model. No sampling loop. No value network. A supervised loss on preference pairs that optimizes the same KL-regularized objective &mdash; this is <strong>direct preference optimization</strong>, DPO, and the collapse above is the whole of it. The whole apparatus collapsed because an intractable constant was identical on both sides of a difference &mdash; the same cancellation-by-differencing that made Section 14.2's rewards identifiable only up to a constant.</p>
 </div>
 
 <p>The gradient has an instructive shape. Writing \( M \) for the margin inside the logistic, the loss is \( -\log\sigma(M) \) and its derivative carries a factor \( \sigma(-M) \). Pairs the model currently gets <em>wrong</em> &mdash; small or negative margin &mdash; receive weight near 1; pairs it already handles well receive vanishing weight. The method automatically concentrates on what it has not yet learned.</p>
@@ -141,7 +141,7 @@
 </div>
 
 <h2>14.5 Deleting the critic</h2>
-<p>Policy-gradient training needs a baseline to reduce variance, conventionally supplied by a learned value network of roughly the policy's size. Chapter 8's arithmetic makes the cost concrete: carrying policy and critic together roughly doubles the memory bill. An alternative computes the baseline from data instead of a network: sample a <em>group</em> of \( G \) responses to the same prompt, and standardize their rewards within the group,</p>
+<p>Policy-gradient training needs a baseline to reduce variance, conventionally supplied by a learned value network of roughly the policy's size. Chapter 8's arithmetic makes the cost concrete: carrying policy and critic together roughly doubles the memory bill. An alternative &mdash; <strong>group-relative policy optimization</strong>, GRPO &mdash; computes the baseline from data instead of a network: sample a <em>group</em> of \( G \) responses to the same prompt, and standardize their rewards within the group,</p>
 \[ \hat A_i = \frac{r_i - \bar r}{s_r}, \]
 <p>where \( \bar r \) and \( s_r \) are the group's mean and standard deviation. The group supplies its own baseline; no critic is needed. This suits <em>verifiable</em> rewards especially well &mdash; mathematics and code, where a checker returns 1 or 0 &mdash; which is why it underpins modern reasoning training.</p>
 

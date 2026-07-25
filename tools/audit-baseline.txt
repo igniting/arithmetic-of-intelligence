@@ -1,25 +1,9 @@
 # Known audit failures, accepted for now.
 #
-# Checks 7-10 (back-references, derivation bank, lab anchoring, reading
-# locators) were added in the second-edition work against a book that already
-# fails them. Each line here is a defect recorded in docs/CURRICULUM-REVIEW.md
-# with a fix scheduled in docs/SECOND-EDITION-PLAN.md.
+# EMPTY. Every defect the second-edition work inherited has been fixed, and
+# the audit now passes on its own terms rather than against a list.
 #
-# The audit is a ratchet: a failure not listed here breaks the build, and a
-# listed failure that has been fixed must be deleted from this file. Do not add
-# lines to make a new failure go away -- that is the one thing this file is not
-# for.
-#
-# Chapter numbers below are post-renumber (WP1). Regenerated once, at the
-# renumber, after verifying the set was the same 39 defects and not a larger
-# one -- see the commit message.
-#
-# WP1  back-references   1
-# WP6  bank + labs       6
-chapter 07 credits Chapter 14 with 'DPO collapse uses' — no such wording there
-chapter 15 has no entry in the derivation bank
-chapter 16 has no entry in the derivation bank
-chapter 17 has no entry in the derivation bank
-lab 4 runs alongside Chapter 13 but its acceptance criterion cites Derivation 11.x — anchor it to Chapter 11
-lab 7 runs alongside Chapter 16 but its acceptance criterion cites Derivation 13.x — anchor it to Chapter 13
-lab 8 runs alongside Chapter 17 but its acceptance criterion cites Derivation 12.x — anchor it to Chapter 12
+# The ratchet stays in place: if a check starts failing, the build breaks.
+# Adding a line here to silence a new failure is the one thing this file is
+# not for. It exists so that a large, scheduled body of fixes could land
+# incrementally without leaving CI red for weeks -- and that work is done.

@@ -68,6 +68,18 @@
 <p>This is the quantitative content of the phrase &ldquo;momentum glides along the valley floor.&rdquo; Plain descent pays a cost proportional to \( \kappa \); momentum pays a cost proportional to \( \sqrt{\kappa} \). On a valley conditioned at \( 10^4 \), that is the difference between ten thousand steps and one hundred.</p>
 </div>
 
+<div class="box deriv">
+<span class="label">Derivation 3.2 &middot; protocol</span>
+<p class="title">Why the speedup is the square root</p>
+<p>The two rates differ only by a square root inside them, and it is worth seeing exactly how that becomes a square root in the step count. Expand each for large \( \kappa \).</p>
+<p>For plain descent, \( \rho_{\text{GD}} = \frac{\kappa-1}{\kappa+1} \approx 1 - \frac{2}{\kappa} \). Since \( \ln(1-x) \approx -x \) for small \( x \),</p>
+\[ \ln\frac{1}{\rho_{\text{GD}}} \approx \frac{2}{\kappa}. \]
+<p>For momentum, \( \rho_{\text{mom}} = \frac{\sqrt\kappa-1}{\sqrt\kappa+1} \approx 1 - \frac{2}{\sqrt\kappa} \), so \( \ln(1/\rho_{\text{mom}}) \approx 2/\sqrt\kappa \).</p>
+<p>The step count to shrink the error by a factor \( F \) is \( t = \ln F/\ln(1/\rho) \), so the ratio of counts is the inverse ratio of those logarithms:</p>
+\[ \frac{t_{\text{GD}}}{t_{\text{mom}}} \approx \frac{2/\sqrt\kappa}{2/\kappa} = \sqrt{\kappa}. \]
+<p>The whole effect is that momentum's rate carries \( \sqrt\kappa \) where plain descent carries \( \kappa \), and the logarithm turns a difference of rates into a ratio of counts. At \( \kappa = 100 \) that is the factor of ten of Worked Example 3.1; at \( \kappa = 10^4 \) it is a hundred.</p>
+</div>
+
 <div class="drill">
 <span class="label">Drill 3.1</span>
 <p>A valley has \( \kappa = 400 \). Estimate the ratio of plain-gradient-descent steps to momentum steps for the same error reduction, without computing either count in full.</p>
@@ -96,7 +108,7 @@
 <p>The second requirement is asymmetry. Suppose every weight in a layer were initialized to the same constant. Then every unit in that layer computes the identical function of the inputs, receives the identical gradient, and updates identically &mdash; forever. The layer, however wide, collapses to a single effective unit, and no amount of training breaks the tie. This is why initialization must be <em>random</em>: randomness is what breaks the symmetry between units and lets them specialize. It is a one-line argument, but it is the reason a fundamental-looking operation &mdash; &ldquo;set the weights to a sensible constant&rdquo; &mdash; is quietly fatal.</p>
 
 <div class="box deriv">
-<span class="label">Derivation 3.2</span>
+<span class="label">Derivation 3.3</span>
 <p class="title">Symmetry never breaks itself</p>
 <p>Consider two units in a layer, with incoming weight vectors \( w_1 \) and \( w_2 \), fed the same inputs. If \( w_1 = w_2 \) at initialization, then their outputs are equal at every input, so the loss depends on them only through their sum. The gradient of the loss with respect to \( w_1 \) therefore equals the gradient with respect to \( w_2 \), and one gradient step keeps \( w_1 = w_2 \). By induction the two are equal for all time. The only way to give them distinct gradients is to start them at distinct values &mdash; hence random initialization.</p>
 </div>
@@ -128,7 +140,7 @@
 <p class="exgrade">B &middot; Problems</p>
 <ol class="ex">
 <li><strong>The valley, end to end.</strong> For the surface \( L(x,y) = \tfrac12(\lambda_1 x^2 + \lambda_2 y^2) \) with \( \lambda_1 = 200 \), \( \lambda_2 = 2 \): (a) give the largest stable \( \eta \); (b) with \( \eta \) set to \( 90\% \) of that ceiling, give the per-step contraction factor along each axis; (c) estimate how many steps the shallow direction needs to contract a hundredfold, and comment on how many the steep direction &ldquo;wastes&rdquo; oscillating.</li>
-<li><strong>The square-root promise.</strong> Show that for large \( \kappa \), the ratio of plain-descent steps to momentum steps for a fixed error reduction tends to \( \sqrt{\kappa} \). (Hint: expand \( \ln(1/\rho) \) for each rate when \( \kappa \) is large.)</li>
+<li><strong>The square-root promise, at a second condition number.</strong> Reproduce Derivation 3.2 from nothing, then evaluate both step counts explicitly at \( \kappa = 2500 \) for a thousandfold error reduction, and confirm the ratio is 50. State in one sentence why the approximation \( \ln(1-x) \approx -x \) is safe here.</li>
 <li><strong>Compounded initialization error.</strong> A twelve-layer stack, each layer fan-in 500, is initialized with a uniform \( \sigma = 1/\sqrt{1000} \) &mdash; a factor \( \sqrt{2} \) too small. By what factor has the activation variance changed after all twelve layers, relative to a variance-preserving initialization?</li>
 </ol>
 </div>
@@ -141,7 +153,7 @@
 
 <div class="gate">
 <span class="label">Gate 3 &middot; Pass before Chapter 4</span>
-<p>Reproduce Derivation 3.1 (the stable step range) and the \( \sqrt{\kappa} \) argument of B-2 on blank paper, then attempt B-1 closed book. This is the first of the three derivations carrying the three-separate-days protocol: return to the \( \kappa \)-versus-\( \sqrt{\kappa} \) result on two later days and reproduce it cold each time. It is the template for the compute-optimal derivation of Chapter 7, and the fluency you build here is the fluency you will spend there.</p>
+<p>Reproduce Derivations 3.1 (the stable step range) and 3.2 (the \( \sqrt{\kappa} \) speedup) on blank paper, then attempt B-1 closed book. This is the first of the three derivations carrying the three-separate-days protocol: return to the \( \kappa \)-versus-\( \sqrt{\kappa} \) result on two later days and reproduce it cold each time. It is the template for the compute-optimal derivation of Chapter 7, and the fluency you build here is the fluency you will spend there.</p>
 </div>
 
 <div class="readings">
