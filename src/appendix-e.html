@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appendix E · Notation and Glossary — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+<style>
+.sym{list-style:none;margin-left:0}
+.sym li{display:flex;gap:16px;padding:7px 0;border-bottom:1px solid var(--rule);max-width:none;align-items:baseline}
+.sym .s{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);font-weight:600;min-width:3.4em}
+.sym .m{flex:1}
+.sym .w{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);white-space:nowrap}
+.gl{list-style:none;margin-left:0}
+.gl li{padding:8px 0;border-bottom:1px solid var(--rule);max-width:none}
+.gl b{font-family:'Zilla Slab',serif;font-size:16px}
+.gl .w{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-left:6px}
+</style>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="appendix-d.html">&larr; Appendix D</a><a href="index.html">Contents</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Appendix E</span>
+  <h1 class="ch">Notation and Glossary</h1>
+  <p class="ch-blurb">What every symbol means, which ones mean more than one thing, and where each term was defined.</p>
+</header>
+
+<p class="lead">Look here when a symbol stops meaning what you thought it meant. Several carry more than one meaning, because the field's own conventions collide and renaming them would make this book harder to read against the papers rather than easier.</p>
+
+<h2>Symbols that mean one thing throughout</h2>
+
+<ul class="sym">
+<li><span class="s">\( N \)</span><span class="m">Number of parameters in a model.</span><span class="w">Ch. 2</span></li>
+<li><span class="s">\( D \)</span><span class="m">Number of training tokens.</span><span class="w">Ch. 7</span></li>
+<li><span class="s">\( C \)</span><span class="m">A compute budget, in floating-point operations.</span><span class="w">Ch. 7</span></li>
+<li><span class="s">\( T \)</span><span class="m">Tokens generated over a deployment's lifetime.</span><span class="w">Ch. 17</span></li>
+<li><span class="s">\( \theta \)</span><span class="m">All parameters of a network, collected into one vector.</span><span class="w">Ch. 2</span></li>
+<li><span class="s">\( \eta \)</span><span class="m">Step size, also called the learning rate.</span><span class="w">Ch. 2</span></li>
+<li><span class="s">\( \lambda \)</span><span class="m">A curvature of the loss surface along one axis.</span><span class="w">Ch. 3</span></li>
+<li><span class="s">\( H \)</span><span class="m">Number of attention heads; \( H_{kv} \) when keys and values are shared.</span><span class="w">Ch. 6, 11</span></li>
+<li><span class="s">\( V \)</span><span class="m">Vocabulary size.</span><span class="w">Ch. 2</span></li>
+<li><span class="s">\( s \)</span><span class="m">Sequence position, or sequence length.</span><span class="w">Ch. 11</span></li>
+<li><span class="s">\( \Phi \)</span><span class="m">The standard normal cumulative distribution; values in Section 1.3.</span><span class="w">Ch. 1</span></li>
+<li><span class="s">\( \pi \)</span><span class="m">A policy: the model as a distribution over responses. \( \pi_{\text{ref}} \) is the frozen starting copy.</span><span class="w">Ch. 14</span></li>
+<li><span class="s">\( Z \)</span><span class="m">A partition function &mdash; whatever a non-negative quantity must be divided by to sum to one.</span><span class="w">Ch. 14</span></li>
+<li><span class="s">\( \Delta \)</span><span class="m">Quantizer step size.</span><span class="w">Ch. 13</span></li>
+<li><span class="s">\( \Upsilon \)</span><span class="m">The complexity-weighted intelligence measure.</span><span class="w">Ch. 10</span></li>
+</ul>
+
+<h2>Symbols that carry more than one meaning</h2>
+
+<p>Each is redefined at first use in every chapter that uses it. If one appears without a definition nearby, that is a defect &mdash; report it.</p>
+
+<ul class="sym">
+<li><span class="s">\( \beta \)</span><span class="m"><strong>Five meanings.</strong> A power-law exponent (Ch. 1, 5); the momentum coefficient (Ch. 2, 3); bytes per stored value (Ch. 11); the strength of the KL leash (Ch. 14); the per-step noise rate of a diffusion schedule (Ch. 16). The last two are adjacent and are the pair to watch.</span></li>
+<li><span class="s">\( k \)</span><span class="m"><strong>Seven meanings.</strong> Kernel side (Ch. 4); the constant in \( C = kND \), which is 6 (Ch. 7); number of independent parts of a task (Ch. 9); draft length (Ch. 12); the \( k \) of top-\( k \) routing (Ch. 13); number of samples drawn (Ch. 15); sampling stride (Ch. 16).</span></li>
+<li><span class="s">\( \sigma \)</span><span class="m">A weight's standard deviation (Ch. 1, 3); the logistic function \( \sigma(u) = 1/(1+e^{-u}) \) (Ch. 2, 5, 14); coding widths \( \sigma_p, \sigma_q \) and a noise standard deviation (Ch. 10).</span></li>
+<li><span class="s">\( \alpha \)</span><span class="m">A loss exponent (Ch. 7); the acceptance rate of a draft token (Ch. 12); the noise-retention factor, with \( \bar\alpha_t \) its running product (Ch. 16).</span></li>
+<li><span class="s">\( \epsilon \)</span><span class="m">A tolerance (Ch. 1, 5); the clip width of the surrogate (Ch. 14); the noise vector a diffusion model predicts (Ch. 16).</span></li>
+<li><span class="s">\( A, B \)</span><span class="m">Coefficients of the loss surface (Ch. 7); the low-rank factors of an adapter (Ch. 13); \( A \) alone is an advantage (Ch. 14); \( B \) alone is a batch size (Ch. 11). Also option labels in comparisons.</span></li>
+<li><span class="s">\( d \)</span><span class="m">Model width; \( d_{\text{head}} = d/H \) is the width one head works in, and it is \( d_{\text{head}} \) that the attention scaling divides by.</span></li>
+<li><span class="s">\( L \)</span><span class="m">The loss (Ch. 2, 7); the number of layers or residual blocks (Ch. 4, 8, 11).</span></li>
+<li><span class="s">\( E \)</span><span class="m">The irreducible term of the loss surface (Ch. 7); the number of experts (Ch. 13); an expectation, written \( \mathbb{E} \).</span></li>
+<li><span class="s">\( p \)</span><span class="m">A probability (Ch. 9, 15); the parameter count in the OLS excess risk (Ch. 10); the target distribution in speculative decoding (Ch. 12).</span></li>
+<li><span class="s">\( \gamma \)</span><span class="m">A discount factor (Ch. 1, 10); the tokenizer's compression ratio in characters per token (Ch. 2, 10).</span></li>
+<li><span class="s">\( \rho \)</span><span class="m">A per-step contraction rate (Ch. 3); the probability ratio \( \pi/\pi_{\text{old}} \) (Ch. 14).</span></li>
+<li><span class="s">\( \kappa \)</span><span class="m">The condition number (Ch. 3); the additive constant a reward is identified only up to (Ch. 14).</span></li>
+</ul>
+
+<h2>Glossary</h2>
+
+<p>Where each term is defined. Terms stated in Chapter 2 are the objects the book computes with; the rest are introduced where they are first needed.</p>
+
+<ul class="gl">
+<li><b>Activation</b><span class="w">§2.1</span> &mdash; an entry of a layer's output. Activations are retained for the backward pass, which is why they occupy memory (§8.3).</li>
+<li><b>Advantage</b><span class="w">§14.1</span> &mdash; a response's reward minus a baseline. Positive for better than expected.</li>
+<li><b>Arithmetic intensity</b><span class="w">§11.2</span> &mdash; operations performed per byte moved. Compared against the machine's ridge point to decide what binds.</li>
+<li><b>Backpropagation</b><span class="w">§2.3</span> &mdash; evaluating the product of Jacobians efficiently, by sweeping backward and accumulating.</li>
+<li><b>Baseline</b><span class="w">§14.1</span> &mdash; a prediction of a prompt's typical reward, subtracted to leave only what distinguishes responses.</li>
+<li><b>Bubble</b><span class="w">§8.1</span> &mdash; the fraction of accelerator-time a pipeline spends idle filling and draining.</li>
+<li><b>Checkpointing</b><span class="w">§8.3</span> &mdash; storing activations only at segment boundaries and recomputing the rest, at \( g = \sqrt{L} \).</li>
+<li><b>Compression ratio</b><span class="w">§2.4</span> &mdash; characters per token. Converts bits per token into bits per character.</li>
+<li><b>Condition number</b><span class="w">§3.1</span> &mdash; largest curvature over smallest. Sets how slowly gradient descent travels.</li>
+<li><b>Contamination</b><span class="w">§9.2</span> &mdash; the fraction of a test set seen during training.</li>
+<li><b>Coverage</b><span class="w">§15.1</span> &mdash; the probability that a correct answer is somewhere among \( k \) samples. Not accuracy.</li>
+<li><b>Critic</b><span class="w">§14.1</span> &mdash; a learned network supplying the baseline, roughly the policy's size, and the thing group-relative methods delete.</li>
+<li><b>Cross-entropy</b><span class="w">§2.2</span> &mdash; \( -\ln q \) for the outcome that occurred; literally a code length (§10.2).</li>
+<li><b>Decode</b><span class="w">§11.1</span> &mdash; generating one token at a time. Memory-bound.</li>
+<li><b>Forget gate</b><span class="w">§5.1</span> &mdash; the factor multiplying a recurrent cell's memory each step, and therefore its gradient horizon.</li>
+<li><b>Head</b><span class="w">§6.1</span> &mdash; one of \( H \) parallel attention computations, each of width \( d/H \). Splitting is free.</li>
+<li><b>Jacobian</b><span class="w">§2.3</span> &mdash; the matrix of partial derivatives of a vector output with respect to a vector input.</li>
+<li><b>KL divergence</b><span class="w">§2.6</span> &mdash; the extra cost of coding \( p \) with a code built for \( q \). Non-negative, zero only at equality, asymmetric.</li>
+<li><b>KV cache</b><span class="w">§11.1</span> &mdash; stored keys and values for previous positions, so they need not be recomputed. Linear in context.</li>
+<li><b>Logit</b><span class="w">§2.2</span> &mdash; an unconstrained score, before the softmax.</li>
+<li><b>MFU</b><span class="w">§11.3</span> &mdash; model FLOP utilization: useful operations per second over the machine's peak.</li>
+<li><b>Mixed precision</b><span class="w">§8.2</span> &mdash; half-precision arithmetic with a full-precision master copy of the weights.</li>
+<li><b>Multiply&ndash;accumulate</b><span class="w">§1.8</span> &mdash; one multiplication and one addition, taken together. Two FLOPs.</li>
+<li><b>Normalization</b><span class="w">§2.5</span> &mdash; subtract the mean, divide by the standard deviation, apply a learned scale and shift.</li>
+<li><b>Perplexity</b><span class="w">§2.2</span> &mdash; cross-entropy re-expressed as an effective branching factor, \( 2^H \).</li>
+<li><b>Policy</b><span class="w">§14.1</span> &mdash; the model seen as a distribution over responses to a prompt.</li>
+<li><b>Prefill</b><span class="w">§11.1</span> &mdash; processing a whole prompt at once. Compute-bound.</li>
+<li><b>Randomness deficiency</b><span class="w">§10.5</span> &mdash; how much shorter a member's description is than a typical member's.</li>
+<li><b>Residual connection</b><span class="w">§4.2</span> &mdash; adding a block's input to its output, so the Jacobian gains an identity.</li>
+<li><b>Ridge point</b><span class="w">§11.2</span> &mdash; a machine's peak operation rate divided by its bandwidth. Operations per byte.</li>
+<li><b>Softmax</b><span class="w">§2.2</span> &mdash; exponentiate and normalize. Sees only differences of logits; saturates.</li>
+<li><b>Token</b><span class="w">§2.4</span> &mdash; a vocabulary entry. What \( D \) counts.</li>
+<li><b>Typicality</b><span class="w">§10.5</span> &mdash; being a representative member of a set, as against merely belonging to it.</li>
+</ul>
+
+<div class="note gate">
+<span class="label">On the index</span>
+<p>This book has no page index. In the web edition the browser's own search does the job better than any list, and in the print edition an index would have to be generated from the assembled document rather than written. That generation is a build feature, not a writing task, and it is the last thing on the list in <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">docs/SECOND-EDITION-PLAN.md</span>. Until it exists, the glossary above and the derivation bank of Appendix A are the two ways in.</p>
+</div>
+
+<footer>
+  <span>Appendix E &middot; Notation and Glossary</span>
+  <span><a href="index.html">Back to contents</a></span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -45,7 +45,7 @@ ORDER = [
     ("chapter-16.html", None), ("chapter-17.html", None),
     ("appendix-a.html", "Appendices"),
     ("appendix-b.html", None), ("appendix-c.html", None),
-    ("appendix-d.html", None),
+    ("appendix-d.html", None), ("appendix-e.html", None),
 ]
 
 # The typeface files to embed: (css family name, package, filename pattern, variants)

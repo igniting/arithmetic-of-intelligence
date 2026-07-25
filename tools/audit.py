@@ -15,6 +15,7 @@ Checks:
   8. bank         — Appendix A entries are one-per-chapter and not over-bundled
   9. labs         — every lab follows the derivation it verifies
  10. readings     — every reading annotation names where in the source to look
+ 11. notation     — docs/NOTATION.md lists the chapters each symbol really uses
 
 Run:  python3 tools/audit.py        (exit code 1 if anything fails)
 """
@@ -304,6 +305,31 @@ for p in chapters:
                 f"\"{re.sub(r'<[^>]+>', '', how)[:60]}...\"")
 if len(problems) == before:
     ok("every reading names where in the source to look")
+
+# ---------------------------------------------------------------- 11. notation
+# docs/NOTATION.md is only useful if it is true. Check that the chapter list
+# against each colliding symbol matches where that symbol actually appears.
+print("\nnotation registry")
+before = len(problems)
+GREEK = {"beta": "β", "kappa": "κ", "alpha": "α", "sigma": "σ", "gamma": "γ",
+         "eta": "η", "rho": "ρ", "lambda": "λ", "Upsilon": "Υ", "epsilon": "ε"}
+reg = (ROOT / "docs" / "NOTATION.md")
+if not reg.exists():
+    bad("docs/NOTATION.md is missing")
+else:
+    rows = dict(re.findall(r"^\| \*\*(\S+?)\*\* \|.*\| ([\d, ]+) \|$",
+                           reg.read_text(), re.M))
+    for tex, sym in GREEK.items():
+        if sym not in rows:
+            continue
+        claimed = {int(x) for x in rows[sym].replace(" ", "").split(",") if x}
+        actual = {int(p.stem[-2:]) for p in chapters
+                  if re.search(rf"\\{tex}\b", text(p))}
+        if claimed != actual:
+            bad(f"NOTATION.md says {sym} is used in {sorted(claimed)}, "
+                f"but it appears in {sorted(actual)}")
+if len(problems) == before:
+    ok("every registered symbol's chapter list matches the source")
 
 # ---------------------------------------------------------------- summary
 #

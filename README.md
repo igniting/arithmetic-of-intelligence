@@ -17,7 +17,7 @@ Nothing in the book asks you to memorise a benchmark score, a release date, or a
 | **I — Foundations** | 1 The Mathematical Toolkit · 2 The Objects |
 | **II — The Classical Era (2012–2022)** | 2 The Geometry of Training · 3 The Architecture of Depth · 4 Memory and Gates · 5 Attention · 6 The Economics of Scale · 7 The Machinery of Scale · 8 Measurement · 9 Compression and Occam |
 | **III — The Modern Era (2022– )** | 10 The Price of a Token · 11 Bytes over FLOPs · 12 Sparsity and Thrift · 13 Teaching Preferences · 14 Thinking at Inference Time · 15 Generation by Denoising · 16 The Whole Lifecycle |
-| **Appendices** | A The Derivation Bank · B The Trap Taxonomy · C The Lab Manual · D Solutions |
+| **Appendices** | A The Derivation Bank · B The Trap Taxonomy · C The Lab Manual · D Solutions · E Notation and Glossary |
 
 Two editions are built from the same source: a linked **[web edition](https://igniting.github.io/arithmetic-of-intelligence/)** (`src/index.html`, math rendered in-browser by KaTeX) and a 177-page **PDF** (math pre-rendered, fonts embedded, fully self-contained). The PDF is built by CI and available as a build artifact on each push.
 
