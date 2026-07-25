@@ -32,7 +32,11 @@
 <p>Learning long-range structure requires a gradient to travel backward across many steps, and backward travel across a recurrence is a <em>product</em> of per-step factors. Chapter 4 showed what long products do: they die or explode unless something holds them in check. Here the same problem reappears along the time axis rather than the depth axis, and the fix has the same character. What follows derives the horizon over which memory survives, the single constant that sets it, and a consequence for regularization that catches most people out.</p>
 
 <h2>5.1 The gradient horizon</h2>
-<p>Backpropagation through time multiplies the gradient, at each step, by a factor governing how much the state at one step influenced the next. Call that factor \( f \). After \( t \) steps the gradient carries \( f^t \). If \( f < 1 \), the influence decays geometrically; the number of steps over which a gradient survives is a logarithm problem of exactly the kind Chapter 1 drilled.</p>
+<p>First the object itself, because the whole chapter turns on one of its terms. A gated cell carries a memory vector \( c_t \) from step to step. At each step it decides how much of that memory to keep and how much new material to add:</p>
+\[ c_t = f_t \odot c_{t-1} + i_t \odot g_t, \]
+<p>where \( g_t \) is a candidate update computed from the input and the previous state, \( i_t \) is an <em>input gate</em> deciding how much of it to admit, \( f_t \) is the <em>forget gate</em> deciding how much of the old memory to retain, and \( \odot \) multiplies entrywise. Both gates are values in \( (0,1) \) produced by a logistic function &mdash; Section 2.2 &mdash; of a learned pre-activation, so the cell computes them afresh at every step rather than carrying them as fixed weights.</p>
+<p>Now differentiate. Holding the gates fixed, \( \partial c_t/\partial c_{t-1} = \operatorname{diag}(f_t) \): the memory's sensitivity to its own past is the forget gate and nothing else. That is the entire reason this architecture exists, and it is why the factor in what follows is not an abstraction but a number the network chooses.</p>
+<p>Backpropagation through time multiplies the gradient, at each step, by exactly that factor. Call it \( f \). After \( t \) steps the gradient carries \( f^t \). If \( f < 1 \), the influence decays geometrically; the number of steps over which a gradient survives is a logarithm problem of exactly the kind Chapter 1 drilled.</p>
 
 <div class="box deriv">
 <span class="label">Derivation 5.1</span>

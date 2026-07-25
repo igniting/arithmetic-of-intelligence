@@ -65,7 +65,13 @@
 </div>
 
 <h2>16.2 Sampling, and how to shorten it</h2>
-<p>Generation reverses the ladder: start from noise and repeatedly subtract the network's predicted noise. Done naively this takes as many network evaluations as the forward process had steps &mdash; often a thousand, which is expensive. A reformulation of the reverse process makes it deterministic and permits <em>strides</em>: take every twentieth step instead of every step, and a thousand-step schedule becomes fifty network evaluations at modest quality cost. Since cost is proportional to the number of evaluations, this is a twentyfold saving &mdash; the single most consequential practical fact about deploying these models.</p>
+<p>Generation reverses the ladder: start from noise and repeatedly remove the network's predicted noise. One reverse step is</p>
+\[ x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\,\epsilon_\theta(x_t, t)\right) + \sigma_t z, \qquad z \sim \mathcal{N}(0, I), \]
+<p>where \( \epsilon_\theta \) is the network's estimate of the noise in \( x_t \) and \( \sigma_t \) sets how much fresh noise is injected on the way back down. This update is <strong>given</strong>: deriving it requires the variational argument this chapter's readings set aside, and nothing below depends on where it came from. What matters is its shape &mdash; one network evaluation per step, and a step index that must walk down the ladder it walked up.</p>
+<p>That shape is the cost. Run it as written and generating one image takes as many network evaluations as the forward process had steps, often a thousand. Setting \( \sigma_t = 0 \) makes the reverse process deterministic, and a deterministic trajectory can be sampled at a subset of its steps: take every twentieth \( t \) instead of every \( t \), and the same schedule needs fifty evaluations rather than a thousand.</p>
+<p>Now price it, because the arithmetic here is the whole practical story and it is one line. Cost is proportional to the number of network evaluations \( n_{\text{eval}} \), so a stride \( k \) over a \( T \)-step schedule costs</p>
+\[ n_{\text{eval}} = \left\lceil \frac{T}{k} \right\rceil, \]
+<p>and the saving is the factor \( k \), exactly and with nothing hidden in it. At \( T = 1000 \) and \( k = 20 \) that is fifty evaluations against a thousand, a twentyfold reduction in the cost of every image the model ever generates. Quality degrades as \( k \) grows, gently at first and then not, and where that knee sits is measured rather than derived &mdash; the readings give the table.</p>
 
 <h2>16.3 Guidance is extrapolation</h2>
 <p>To make generation follow a condition &mdash; a text prompt, say &mdash; the model is trained both with the condition and, some fraction of the time, without it. At sampling time the two predictions are combined:</p>

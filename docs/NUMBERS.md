@@ -76,6 +76,12 @@ Introduced once in Chapter 11 and treated as established in 12, 13 and 17.
 
 | result | value |
 |---|---|
+| attention weights per layer | **4d²** (independent of head count) |
+| feed-forward weights per layer | **8d²** |
+| transformer layer total | **12d²** |
+| 7 B check: H = 32, d_head = 128 → d | **4096** |
+| 12d² × 32 layers | **6.44 B** non-embedding |
+| + untied tables at V = 32,000 | **0.26 B**, total **6.70 B** (≈ 4% tables) |
 | Var(q·k) at d = 512 → sd | **22.6** = 16√2 |
 | attention/feed-forward crossover | **n = 4d** |
 | reversed lag at position j | 2j − 1 |

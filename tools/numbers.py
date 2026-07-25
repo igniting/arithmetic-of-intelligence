@@ -78,6 +78,13 @@ check("70 B at 4 bits", ceiling(70, 0.5), "28.6 \\), and \\( 57 \\) tokens")
 check("35 B at fp16", ceiling(35), "29 tokens per second",
       contradicts=("roughly 57 tokens per second against 28",))
 
+print("\ntransformer parameter count (Chapter 6)")
+d, H, L, V = 4096, 32, 32, 32000
+check("head dimension d/H", d / H, "32 \\times 128 = 4096")
+check("one layer, 12d^2", 12 * d**2, "201{,}326{,}592")
+check("32 layers, non-embedding", 12 * d**2 * L, "6.44 \\times 10^9")
+check("untied tables", 2 * V * d, "0.26 \\times 10^9")
+
 print("\nkey-value cache")
 kv_7b = 2 * 32 * 32 * 128 * FP16
 check("7 B, 32 kv-heads, per token", kv_7b, "524{,}288")
