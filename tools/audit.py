@@ -279,10 +279,11 @@ LOCATOR = re.compile(
     r"Section|Figure|Table|Appendix|Chapter \d|Chapters \d"
     r"|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+) pages?\b"
     r"|abstract|introduction|training recipe"
+    r"|\b(?:Episodes?|Lectures?|Parts?) \d"
     # a *named* element — "the parallelism chapter", "the memory table" — but not
     # "this chapter", which is about our book and locates nothing in theirs
     r"|\b(?!this|the|that|each|every|its|his|her|their|a|an)\w+"
-    r" (?:chapter|appendix|table|figure|box|section)\b", re.I)
+    r" (?:chapters?|appendix|tables?|figures?|box|sections?)\b", re.I)
 vague = 0
 for p in chapters:
     t = text(p)

@@ -1,0 +1,25 @@
+<!-- Splice into src/appendix-d.html immediately after the "Part I" heading's
+     Chapter 1 block, i.e. before <h3 class="solch">Chapter 2 &middot; The
+     Geometry of Training</h3> once that heading has been renumbered to
+     Chapter 3. Nothing else in Appendix D changes. -->
+
+<h3 class="solch">Chapter 2 &middot; The Objects</h3>
+
+<div class="sol"><span class="q">B-1 &middot; Where the parameters are</span>
+<p>Tables: \( 2 \times 32{,}000 \times 1024 = 65.54 \) M. Each hidden layer holds \( 1024 \times 1024 + 1024 = 1{,}049{,}600 \), so twelve hold \( 12.60 \) M. Total \( 78.13 \) M, of which the tables are \( 65.54/78.13 = 84\% \).</p>
+<p>The tables' size is fixed by \( V \) and \( d \); the layers' size grows with depth. So the fraction falls as layers are added &mdash; at 120 layers the same tables would be about a third, and at 1200 about four percent. Scaling studies relate capability to parameter count and want a number that tracks computational depth; a count dominated by a vocabulary table would make two models with different tokenizers look like different sizes while computing identically. Hence non-embedding parameters.</p></div>
+
+<div class="sol"><span class="q">B-2 &middot; Saturation, numerically</span>
+<p>The softmax of \( (a, 0) \) gives the first option \( \sigma(a) \), and \( \sigma'(a) = \sigma(a)(1-\sigma(a)) \).</p>
+<p><span class="keynum">a = 1 &rarr; p = 0.731, slope 0.197 &nbsp;&middot;&nbsp; a = 4 &rarr; p = 0.982, slope 0.0177 &nbsp;&middot;&nbsp; a = 10 &rarr; p = 0.99995, slope 0.0000454</span></p>
+<p>A gap of 10 leaves the slope four thousand times smaller than a gap of 1. As the leading logit pulls away, the probability it produces stops responding to it, so the gradient reaching the logits vanishes and learning stalls &mdash; the network is confident and therefore deaf. Nothing has gone wrong with the parameters; the arithmetic of the exponential simply ran out of room. This is why every mechanism in the book that feeds a softmax also controls the scale of what it feeds it, from the \( 1/\sqrt{d} \) of Chapter 6 to the temperature of Section 6.3.</p></div>
+
+<div class="sol"><span class="q">B-3 &middot; The product of Jacobians</span>
+<p>With every \( J_\ell = cI \), the product over \( L \) layers is \( c^L I \). At \( L = 50 \): \( 0.9^{50} = e^{50\ln 0.9} = e^{-5.27} = 5.2\times10^{-3} \), and \( 1.1^{50} = e^{50\ln 1.1} = e^{4.77} = 117 \).</p>
+<p>A ten percent error in either direction, compounded fifty times, spans a factor of about \( 23{,}000 \) between the two outcomes &mdash; one gradient has all but vanished, the other has grown by two orders of magnitude. The usable range of \( c \) is therefore not a range at all but a knife edge near 1, and it narrows as \( L \) grows: holding \( c^L \) within a factor of ten of 1 requires \( c \) within about \( 2.3/L \) of unity, which at \( L = 50 \) is five percent and at \( L = 500 \) is half of one percent. Depth does not merely make this problem worse; it makes it worse in proportion to itself. Chapter 4 does not solve it by tuning \( c \) &mdash; it changes the factor from \( J_\ell \) to \( I + J_\ell \), so that the identity survives no matter what \( J_\ell \) does.</p></div>
+
+<div class="sol"><span class="q">C-1 &middot; Why the loss is a length</span>
+<p>Take the expectation of the cross-entropy under the true distribution \( p \) and add and subtract \( \ln p_i \) inside the sum:</p>
+<p>\( \mathbb{E}_p[-\ln q_i] = -\sum_i p_i \ln q_i = -\sum_i p_i \ln p_i + \sum_i p_i \ln\frac{p_i}{q_i} = H(p) + \mathrm{KL}(p\|q) \).</p>
+<p>So the expected loss is the entropy of the data plus the divergence of the model from it. The second term is what training reduces, and it is non-negative and zero only when \( q = p \). The first term does not contain \( q \) at all: no model, of any size, trained on any amount of data, can push the loss below it.</p>
+<p>In a language model \( H(p) \) is the entropy of language itself &mdash; the genuine unpredictability of the next token given everything before it, which no amount of modelling removes because it is a property of the text and not of the predictor. That floor is the \( E \) term in Chapter 7's loss surface \( L(N,D) = AN^{-a} + BD^{-b} + E \), and this is why it appears there as a constant rather than as something to be optimized away. It is also why it drops out of the compute-optimal derivation entirely: a term with no \( N \) and no \( D \) in it vanishes on differentiation, so the best split of a budget between model and data does not depend on how predictable language is.</p></div>
