@@ -1,5 +1,12 @@
 # Second edition — plan of work
 
+> **Status: complete.** All eight work packages have landed; `make audit` (eleven
+> checks) and `make numbers` pass, and `tools/audit-baseline.txt` is empty.
+> What was deferred, deliberately, is listed at the foot of this document.
+> The plan is kept as written so the reasoning behind each package survives
+> alongside the commits that executed it.
+
+
 The findings are in `docs/CURRICULUM-REVIEW.md`. This is what to do about them.
 
 Two decisions taken up front, because everything below follows from them:
@@ -348,3 +355,62 @@ gate → lab chain; the trap taxonomy as a diagnostic rather than a list;
 systems before alignment; Part II ending on compression; the labs' predict-the-
 number acceptance rule; Gate 9's part-capstone sweep. None of the work above
 changes any of them — it makes the book able to keep the promises they imply.
+
+
+---
+
+# What actually happened
+
+Each package landed roughly as written. The differences worth recording:
+
+**WP0.** The symbol registry moved to WP7, where the registry file it checks
+actually exists. The bank check was redesigned: "every entry backed by a
+derivation box" would have failed 14 times and could never have passed, since
+the book will never box all fifty entries. The rule became: no entry spans
+several chapters, every chapter is represented, no chapter carries more
+entries than it has boxes. That fires on the real defects and is reachable.
+
+**WP1.** The renumber's first attempt double-shifted `## Chapter 13` and
+`Ch. 14–16`, because two rules each claimed them. Rebuilt as a single regex
+alternation in one pass. `tools/renumber.py` is kept, with a guard that
+refuses to run twice.
+
+**WP2.** Chapter 6's new block section collided with an existing Worked
+Example 6.1 and Drill 6.1; labels are renumbered in document order. The same
+happened in Chapters 10 and 14.
+
+**WP4.** Item 4 — costing normalization, and positional encoding — was
+deferred as the plan allowed. Adaptive optimizer state is covered by
+Derivation 8.2.
+
+**WP5.** Locators are named elements ("the degradation figure in the opening",
+"the shortcut-variant table") rather than section numbers, which drift between
+arXiv revisions. Found while doing it: the locator check's own exclusion list
+lacked word boundaries, so `(?!a)` rejected every word starting with "a". The
+first edition measures 45/76 either way, so the review's figure was not
+inflated by the bug.
+
+**WP6.** Thirty-eight bank entries became fifty. Splitting pushed Chapter 10
+past its box count, which is the review's own finding that the chapter
+under-teaches what it examines; three results that lived in prose are now
+boxed. The DPO naming question, left open in the review, was decided in
+favour of naming each method once at its point of introduction.
+
+**WP7.** The index was not built. It has to be generated from the assembled
+print document rather than written, which is a build feature; Appendix E says
+so where a reader will look for it.
+
+## Still open
+
+1. **The index**, per above — a build task against `.cache/book-print.html`.
+2. **Costing normalization**, and **positional encoding / context extension**,
+   both deferred from WP4 item 4.
+3. **The Chapter 6 perplexity row** in `docs/NUMBERS.md`, flagged there: a
+   result the ledger commits to and the text does not yet contain.
+4. **Verifying reading locators against the linked versions.** The named
+   elements are stable and were written from knowledge of the papers, but no
+   pass has been made with all 76 sources open.
+5. **A close prose read.** `docs/HISTORY.md` §8 notes that the original prose
+   audit measured patterns across the whole book and read only portions
+   closely. This revision added roughly 9,000 words; they have been checked
+   for arithmetic and cross-reference, not read aloud.
