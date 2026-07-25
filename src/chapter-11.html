@@ -141,10 +141,10 @@
 <div class="readings">
 <h4>Readings for Chapter 11</h4>
 <ul>
-<li><a href="https://kipp.ly/transformer-inference-arithmetic/">Kipply, <em>Transformer Inference Arithmetic</em></a><span class="how">The canonical treatment of this chapter's material. Recompute every number in it yourself.</span></li>
+<li><a href="https://kipp.ly/transformer-inference-arithmetic/">Kipply, <em>Transformer Inference Arithmetic</em></a><span class="how">Its KV-cache section and its arithmetic-intensity section are this chapter with different notation. Recompute every number in both yourself; where you disagree, one of you has dropped a factor of 2.</span></li>
 <li><a href="https://arxiv.org/abs/2211.05102">Pope et al., <em>Efficiently Scaling Transformer Inference</em> (2022)</a><span class="how">Sections 2&ndash;3. The systems view of the roofline argument, with real partitioning strategies.</span></li>
-<li><a href="https://arxiv.org/abs/2305.13245">Ainslie et al., <em>GQA: Grouped-Query Attention</em> (2023)</a> and <a href="https://arxiv.org/abs/1911.02150">Shazeer, <em>Fast Transformer Decoding</em> (2019)</a><span class="how">The cache reduction of Worked Example 11.1; note carefully which budget each improves.</span></li>
-<li><a href="https://jax-ml.github.io/scaling-book/inference/">Austin et al., <em>How to Scale Your Model</em> &mdash; inference chapter</a><span class="how">Pairs directly with this chapter; work its rooflines alongside Derivation 11.2.</span></li>
+<li><a href="https://arxiv.org/abs/2305.13245">Ainslie et al., <em>GQA: Grouped-Query Attention</em> (2023)</a> and <a href="https://arxiv.org/abs/1911.02150">Shazeer, <em>Fast Transformer Decoding</em> (2019)</a><span class="how">The quality-versus-speed table, for what sharing keys and values across head groups costs in accuracy. Worked Example 11.1 gives the cache saving; this gives the bill.</span></li>
+<li><a href="https://jax-ml.github.io/scaling-book/inference/">Austin et al., <em>How to Scale Your Model</em> &mdash; inference chapter</a><span class="how">Its roofline section, worked alongside Derivation 11.2. The best free treatment of this material, and it uses the same ridge-point argument on different hardware.</span></li>
 </ul>
 </div>
 

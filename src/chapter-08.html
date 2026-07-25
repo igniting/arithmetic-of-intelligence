@@ -176,11 +176,11 @@
 <div class="readings">
 <h4>Readings for Chapter 8</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/1811.06965">Huang et al., <em>GPipe</em> (2018)</a><span class="how">The micro-batching pipeline of Derivation 8.1; read their bubble analysis and match it to yours.</span></li>
-<li><a href="https://arxiv.org/abs/1909.08053">Shoeybi et al., <em>Megatron-LM</em> (2019)</a><span class="how">Tensor parallelism &mdash; a different axis of splitting; read for which resource it attacks versus pipelining.</span></li>
+<li><a href="https://arxiv.org/abs/1811.06965">Huang et al., <em>GPipe</em> (2018)</a><span class="how">The bubble-overhead figure and the timing diagram beside it. Match their pipeline schedule against Derivation 8.1's, and confirm their overhead expression is your \( (P-1)/(M+P-1) \).</span></li>
+<li><a href="https://arxiv.org/abs/1909.08053">Shoeybi et al., <em>Megatron-LM</em> (2019)</a><span class="how">The partitioning figures, for a different axis of splitting from Chapter 8's. Read for which resource tensor parallelism attacks, and confirm from Section 8.4 that it trades traffic where pipelining trades idle time.</span></li>
 <li><a href="https://arxiv.org/abs/1910.02054">Rajbhandari et al., <em>ZeRO</em> (2019)</a><span class="how">The state-sharding of Section 8.2, systematized; the three stages of ZeRO are three levels of the division you just did.</span></li>
 <li><a href="https://jax-ml.github.io/scaling-book/">Austin et al., <em>How to Scale Your Model</em></a><span class="how">The best free systems text on this material; work its parallelism chapter now, and note that its roofline chapter previews Chapter 11.</span></li>
-<li><a href="https://huggingface.co/spaces/nanotron/ultrascale-playbook">Hugging Face, <em>The Ultra-Scale Playbook</em></a><span class="how">Parallelism strategies illustrated end to end; useful for the C-challenge's multi-axis picture.</span></li>
+<li><a href="https://huggingface.co/spaces/nanotron/ultrascale-playbook">Hugging Face, <em>The Ultra-Scale Playbook</em></a><span class="how">Its data-parallelism chapter and its activation-memory chapter, which are Sections 8.3 and 8.4 with measurements attached. Useful for the C-challenge's multi-axis picture.</span></li>
 </ul>
 </div>
 

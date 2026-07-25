@@ -291,7 +291,8 @@ LOCATOR = re.compile(
     r"|\b(?:Episodes?|Lectures?|Parts?) \d"
     # a *named* element — "the parallelism chapter", "the memory table" — but not
     # "this chapter", which is about our book and locates nothing in theirs
-    r"|\b(?!this|the|that|each|every|its|his|her|their|a|an)\w+"
+    # the exclusion needs \b, or (?!a) rejects every word starting with "a"
+    r"|\b(?!(?:this|the|that|each|every|its|his|her|their|an?)\b)\w+"
     r" (?:chapters?|appendix|tables?|figures?|box|sections?)\b", re.I)
 vague = 0
 for p in chapters:

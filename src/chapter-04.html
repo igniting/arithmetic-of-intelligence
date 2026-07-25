@@ -183,10 +183,10 @@
 <div class="readings">
 <h4>Readings for Chapter 4</h4>
 <ul>
-<li><a href="https://arxiv.org/abs/1512.03385">He, Zhang, Ren &amp; Sun, <em>Deep Residual Learning for Image Recognition</em> (2015)</a><span class="how">Read the ablations as experiments about Derivation 4.1 &mdash; the degradation problem is the vanishing gradient this chapter cures.</span></li>
-<li><a href="https://arxiv.org/abs/1603.05027">He et al., <em>Identity Mappings in Deep Residual Networks</em> (2016)</a><span class="how">The pre-activation block of the C-challenge, argued in full; compare their reasoning to yours.</span></li>
-<li><a href="https://arxiv.org/abs/1605.06431">Veit, Wilber &amp; Belongie, <em>Residual Networks Behave Like Ensembles of Relatively Shallow Networks</em> (2016)</a><span class="how">Derivation 4.2, measured: they delete blocks at test time and watch the ensemble degrade gracefully.</span></li>
-<li><a href="https://arxiv.org/abs/1511.07122">Yu &amp; Koltun, <em>Multi-Scale Context Aggregation by Dilated Convolutions</em> (2015)</a><span class="how">The origin of Derivation 4.3; note how the exponential schedule is chosen for dense prediction.</span></li>
+<li><a href="https://arxiv.org/abs/1512.03385">He, Zhang, Ren &amp; Sun, <em>Deep Residual Learning for Image Recognition</em> (2015)</a><span class="how">The degradation figure in the opening &mdash; a 56-layer plain network worse than a 20-layer one on <em>training</em> error &mdash; is the vanishing gradient Derivation 4.1 cures. Read their ablation tables as experiments about that derivation.</span></li>
+<li><a href="https://arxiv.org/abs/1603.05027">He et al., <em>Identity Mappings in Deep Residual Networks</em> (2016)</a><span class="how">The shortcut-variant table is the C-challenge argued in full: every way of putting something on the skip path, and what each costs. Compare their reasoning to yours before reading their conclusion.</span></li>
+<li><a href="https://arxiv.org/abs/1605.06431">Veit, Wilber &amp; Belongie, <em>Residual Networks Behave Like Ensembles of Relatively Shallow Networks</em> (2016)</a><span class="how">Derivation 4.2, measured. Go to the lesion-study figure, where blocks are deleted at test time and the ensemble degrades gracefully; that graceful curve is the path-length binomial you derived.</span></li>
+<li><a href="https://arxiv.org/abs/1511.07122">Yu &amp; Koltun, <em>Multi-Scale Context Aggregation by Dilated Convolutions</em> (2015)</a><span class="how">The origin of Derivation 4.3. The context-module table lists the dilation schedule term by term; check that its receptive fields match your \( 2^{n+1}-1 \).</span></li>
 <li><a href="https://cs231n.github.io/convolutional-networks/">Stanford CS231n &mdash; Convolutional Networks</a><span class="how">The standing reference for the arithmetic of Section 4.1; work its worked examples against yours.</span></li>
 </ul>
 </div>
