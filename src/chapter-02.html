@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 2 · The Geometry of Training — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-01.html">&larr; Chapter 1</a><a href="chapter-03.html">Chapter 3 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 2</span>
+  <h1 class="ch">The Geometry of Training</h1>
+  <p class="ch-blurb">For two decades the obstacle to deep learning was not representation but optimization. The problem, and its cure, are a story about the shape of a valley.</p>
+</header>
+
+<p class="lead">Picture a narrow valley with steep walls. You are standing on one slope, blindfolded, allowed only to feel which way the ground falls and step that way. You will bounce from wall to wall and creep along the floor. That, almost exactly, is what training a deep network looked like for twenty years, and understanding why requires nothing more than the shape of the valley.</p>
+<p>It is tempting to assume the difficulty is one of expressiveness &mdash; that among all possible settings of the weights, the rare good one is hard to find. For a long time the opposite was true. Good settings are plentiful. The trouble was that gradient descent, the only search procedure that scales, could not travel to them. It would take a step, overshoot in one direction, crawl in another, and stall. Naming that temptation is worth a sentence, because believing it sends you hunting for the wrong fix &mdash; more capacity, more regularization &mdash; when the problem was never capacity at all.</p>
+
+<h2>2.1 The loss surface as a bowl</h2>
+<p>Near a minimum, any smooth loss looks like a bowl. Along some directions the walls are steep; along others they are shallow. If we align our coordinates with the natural axes of the bowl, the loss separates into independent one-dimensional pieces, each a simple parabola with its own steepness. A convenient model of a two-dimensional slice is</p>
+\[ L(x, y) = \tfrac{1}{2}\left(\lambda_1 x^2 + \lambda_2 y^2\right), \]
+<p>where \( \lambda_1 \) and \( \lambda_2 \) are the steepnesses &mdash; the curvatures &mdash; along the two axes. If \( \lambda_1 \) is much larger than \( \lambda_2 \), the bowl is a long narrow trough: steep across, shallow along. The number that captures this asymmetry is the ratio of the largest curvature to the smallest,</p>
+\[ \kappa = \frac{\lambda_{\max}}{\lambda_{\min}}, \]
+<p>called the <em>condition number</em>. A well-shaped bowl has \( \kappa \) near 1; a pathological valley has \( \kappa \) in the hundreds or thousands. Everything that follows is a statement about how badly a large \( \kappa \) hurts, and what can be done about it.</p>
+
+<h2>2.2 Why the step size is trapped</h2>
+<p>Gradient descent updates each coordinate by subtracting the step size \( \eta \) times the gradient. For our model surface the gradient along \( x \) is \( \lambda_1 x \), so the update is \( x \leftarrow x - \eta \lambda_1 x = (1 - \eta\lambda_1)x \), and likewise for \( y \). Each coordinate is simply multiplied, every step, by a fixed factor. From Chapter 1's stability reflex we know such an iteration converges exactly when the magnitude of the factor is below one.</p>
+
+<p>Before deriving it, guess. If one direction of the bowl is a hundred times steeper than another, how much does that slow you down &mdash; a little, or a lot? Most people's instinct is that it costs you a constant factor, some fixed tax for an awkward shape. The instinct is wrong, and wrong in an important way: the cost is proportional to the ratio itself, so a hundredfold asymmetry costs you roughly a hundredfold in steps. Here is where that comes from.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 2.1</span>
+<p class="title">The stable range of step sizes</p>
+<p>The coordinate \( x \) obeys \( x \leftarrow (1 - \eta\lambda_1)x \), which converges to zero if and only if \( |1 - \eta\lambda_1| < 1 \), i.e. \( 0 < \eta\lambda_1 < 2 \). The same holds for \( y \) with \( \lambda_2 \). Both must hold at once, and since \( \lambda_1 = \lambda_{\max} \) is the larger curvature, it is the binding one:</p>
+\[ 0 < \eta < \frac{2}{\lambda_{\max}}. \]
+<p>This is the whole trap in one line. The steep direction sets a ceiling on the step size. Any larger step and the iteration diverges along that axis, flinging the weights outward. So the step size is <em>hostage to the steepest curvature in the entire problem</em> &mdash; even though most directions would happily accept a far larger step.</p>
+</div>
+
+<p>Now watch what that ceiling does to the shallow direction. With \( \eta \) pinned just under \( 2/\lambda_{\max} \), the shallow coordinate contracts by a factor \( |1 - \eta\lambda_{\min}| \), which is close to \( 1 - 2\lambda_{\min}/\lambda_{\max} = 1 - 2/\kappa \). When \( \kappa \) is large this factor is barely below one: the shallow direction crawls. The steep direction, meanwhile, is oscillating back and forth across the valley, using up the entire step budget just to stay stable. The network is not stuck because it cannot represent the answer; it is stuck because the geometry forces it to inch down the valley floor while ricocheting between the walls.</p>
+
+<h2>2.3 Counting the cost of curvature</h2>
+<p>We can make the slowness precise. The error along the shallow direction contracts by a fixed factor each step, so reaching a target reduction is a logarithm problem of exactly the kind Chapter 1 drilled. It is a standard result &mdash; we take it as given here, the way a physics problem gives you a formula for terminal velocity &mdash; that gradient descent on such a surface, at the best possible fixed step size, contracts the error each step by</p>
+\[ \rho_{\text{GD}} = \frac{\kappa - 1}{\kappa + 1}, \]
+<p>while the same surface, optimized with a well-tuned <em>momentum</em> term that lets the shallow direction accumulate speed, contracts by</p>
+\[ \rho_{\text{mom}} = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}. \]
+<p>The number of steps to shrink the error by a factor \( F \) is \( t = \ln F / \ln(1/\rho) \). The two rates above look similar, but the square root inside the momentum rate is decisive, as the worked example shows.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 2.1</span>
+<p class="title">Three hundred and forty-five steps, or thirty-four</p>
+<p>Take a valley with \( \kappa = 100 \) &mdash; steep direction a hundred times sharper than the shallow one &mdash; and ask how many steps each method needs to reduce the error a thousandfold.</p>
+<p>For plain gradient descent, \( \rho_{\text{GD}} = 99/101 = 0.9802 \), so \( t = \ln(1000)/\ln(1/0.9802) = 6.908/0.02 = 345 \) steps. For momentum, \( \rho_{\text{mom}} = 9/11 = 0.8182 \), so \( t = 6.908/\ln(1/0.8182) = 6.908/0.2007 = 34 \) steps. The ratio is almost exactly ten &mdash; which is \( \sqrt{\kappa} = \sqrt{100} \).</p>
+<p>This is the quantitative content of the phrase &ldquo;momentum glides along the valley floor.&rdquo; Plain descent pays a cost proportional to \( \kappa \); momentum pays a cost proportional to \( \sqrt{\kappa} \). On a valley conditioned at \( 10^4 \), that is the difference between ten thousand steps and one hundred.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 2.1</span>
+<p>A valley has \( \kappa = 400 \). Estimate the ratio of plain-gradient-descent steps to momentum steps for the same error reduction, without computing either count in full.</p>
+<details><summary>Show answer</summary>
+<p>The ratio of step counts is \( \ln(1/\rho_{\text{GD}}) \) versus \( \ln(1/\rho_{\text{mom}}) \) inverted, which for large \( \kappa \) tends to \( \sqrt{\kappa} \). Here \( \sqrt{400} = 20 \). (Explicitly: \( \rho_{\text{GD}} = 399/401 \Rightarrow \ln(1/\rho) = 0.005 \); \( \rho_{\text{mom}} = 19/21 \Rightarrow \ln(1/\rho) = 0.100 \); ratio \( 0.100/0.005 = 20 \).)</p>
+</details>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T1</span>
+<p>The deeper failure this chapter describes is a <em>training</em> failure, not overfitting. When a plain deep network does worse than a shallow one, the instinct is to suspect it has memorized and failed to generalize. But the error that rises is the training error itself: the optimizer never reached a good setting at all. Confusing an optimization failure with a generalization failure sends you reaching for the wrong remedy &mdash; regularization instead of better conditioning &mdash; and it is one of the most common misreadings of the early deep-learning literature.</p>
+</div>
+
+<h2>2.4 Starting in the right place: the statistics of initialization</h2>
+<p>Conditioning governs how the optimizer moves once it starts; initialization governs whether it can start at all. Two separate requirements fall directly out of Chapter 1's variance algebra, and both were, historically, hard-won.</p>
+<p>The first is scale. Recall the fan-in derivation: a unit summing \( m \) unit-variance inputs with weights of variance \( \sigma^2 \) produces an output of variance \( m\sigma^2 \). If \( \sigma^2 \) is chosen carelessly, signal either explodes or vanishes as it crosses each layer, and a deep stack multiplies that error many times over. Preserving the scale of activations from layer to layer requires</p>
+\[ \sigma^2 = \frac{1}{m}, \]
+<p>the principle behind every sensible initialization scheme. The precise constant is adjusted for the nonlinearity in use, but the \( 1/m \) skeleton is always there.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 2.2</span>
+<p class="title">A too-small initialization</p>
+<p>A layer has fan-in \( m = 4096 \). The variance-preserving choice is \( \sigma^2 = 1/4096 \), i.e. \( \sigma \approx 0.0156 \). Suppose instead someone initializes with a flat \( \sigma = 0.01 \). The output variance is then \( m\sigma^2 = 4096 \times 10^{-4} = 0.41 \). Each layer shrinks the signal to under half its variance; across a dozen layers the activations have all but vanished, and with them the gradients. The network trains glacially or not at all &mdash; not because anything is conceptually wrong, but because a single variance was set a factor of \( 1.5 \) too small and compounded.</p>
+</div>
+
+<p>The second requirement is asymmetry. Suppose every weight in a layer were initialized to the same constant. Then every unit in that layer computes the identical function of the inputs, receives the identical gradient, and updates identically &mdash; forever. The layer, however wide, collapses to a single effective unit, and no amount of training breaks the tie. This is why initialization must be <em>random</em>: randomness is what breaks the symmetry between units and lets them specialize. It is a one-line argument, but it is the reason a fundamental-looking operation &mdash; &ldquo;set the weights to a sensible constant&rdquo; &mdash; is quietly fatal.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 2.2</span>
+<p class="title">Symmetry never breaks itself</p>
+<p>Consider two units in a layer, with incoming weight vectors \( w_1 \) and \( w_2 \), fed the same inputs. If \( w_1 = w_2 \) at initialization, then their outputs are equal at every input, so the loss depends on them only through their sum. The gradient of the loss with respect to \( w_1 \) therefore equals the gradient with respect to \( w_2 \), and one gradient step keeps \( w_1 = w_2 \). By induction the two are equal for all time. The only way to give them distinct gradients is to start them at distinct values &mdash; hence random initialization.</p>
+</div>
+
+<p>A small practical corollary closes the chapter, and it too is pure Chapter-1 reasoning. Units with a rectified activation &mdash; zero for negative inputs, linear for positive &mdash; contribute no gradient when their input is negative, and a unit that begins with a negative bias may sit dead from the start. Nudging the initial bias slightly positive shifts the input distribution rightward, so more units begin in their active region and receive gradient. The same variance-and-mean bookkeeping that governs the weights governs this choice; it is not a trick so much as an accounting consequence.</p>
+
+<div class="drill">
+<span class="label">Drill 2.2</span>
+<p>A layer has fan-in \( m = 1024 \). (a) What \( \sigma \) preserves unit output variance? (b) If instead \( \sigma = 0.05 \) is used, what is the output variance, and does the signal grow or shrink across the layer?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( \sigma = 1/\sqrt{1024} = 1/32 \approx 0.031 \). (b) Output variance \( = 1024 \times 0.0025 = 2.56 \); since this exceeds 1, the signal <em>grows</em> across the layer, and would explode across a deep stack.</p>
+</details>
+</div>
+
+<h2>2.5 What the chapter bought</h2>
+<p>Everything that follows rests on what this chapter established, and all of it came from Chapter 1's tools. The stable step size is capped by the steepest curvature, so a badly conditioned problem is slow no matter how patient you are. Momentum converts that \( \kappa \)-sized penalty into a \( \sqrt{\kappa} \)-sized one &mdash; the first appearance of a theme, adaptivity to geometry, that runs through the rest of the field. And initialization is a variance-and-symmetry problem whose answers are forced, not chosen. Chapter 3 takes up the complementary question: if optimization is this sensitive to the shape of the surface, can we <em>build</em> networks whose surfaces are easier to descend? The answer &mdash; residual connections &mdash; is where architecture begins to do the optimizer's job for it.</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>A valley has curvatures \( \lambda_{\max} = 50 \), \( \lambda_{\min} = 2 \). Give \( \kappa \) and the largest stable step size.</li>
+<li>For \( \kappa = 100 \), compute \( \rho_{\text{GD}} \) and \( \rho_{\text{mom}} \) to four decimal places.</li>
+<li>A layer of fan-in 256 is to preserve activation variance. What weight standard deviation does that require?</li>
+<li>Explain in two sentences why initializing all weights of a layer to \( 0.1 \) is no better than initializing them all to \( 0 \).</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>The valley, end to end.</strong> For the surface \( L(x,y) = \tfrac12(\lambda_1 x^2 + \lambda_2 y^2) \) with \( \lambda_1 = 200 \), \( \lambda_2 = 2 \): (a) give the largest stable \( \eta \); (b) with \( \eta \) set to \( 90\% \) of that ceiling, give the per-step contraction factor along each axis; (c) estimate how many steps the shallow direction needs to contract a hundredfold, and comment on how many the steep direction &ldquo;wastes&rdquo; oscillating.</li>
+<li><strong>The square-root promise.</strong> Show that for large \( \kappa \), the ratio of plain-descent steps to momentum steps for a fixed error reduction tends to \( \sqrt{\kappa} \). (Hint: expand \( \ln(1/\rho) \) for each rate when \( \kappa \) is large.)</li>
+<li><strong>Compounded initialization error.</strong> A twelve-layer stack, each layer fan-in 500, is initialized with a uniform \( \sigma = 1/\sqrt{1000} \) &mdash; a factor \( \sqrt{2} \) too small. By what factor has the activation variance changed after all twelve layers, relative to a variance-preserving initialization?</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>Reconditioning by rescaling.</strong> Suppose a diagonal preconditioner multiplies the gradient along each axis by the reciprocal of that axis's curvature, so the effective update along axis \( i \) becomes \( x_i \leftarrow (1 - \eta)x_i \). Show that this makes the effective condition number 1, and explain in a sentence what real second-order and adaptive methods are approximating when they do something like this. (This is the conceptual bridge from this chapter to why adaptive optimizers exist.)</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 2 &middot; Pass before Chapter 3</span>
+<p>Reproduce Derivation 2.1 (the stable step range) and the \( \sqrt{\kappa} \) argument of B-2 on blank paper, then attempt B-1 closed book. This is the first of the three derivations carrying the three-separate-days protocol: return to the \( \kappa \)-versus-\( \sqrt{\kappa} \) result on two later days and reproduce it cold each time. It is the template for the compute-optimal derivation of Chapter 6, and the fluency you build here is the fluency you will spend there.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 2</h4>
+<ul>
+<li><a href="https://www.cs.toronto.edu/~jmartens/docs/Deep_HessianFree.pdf">Martens, <em>Deep Learning via Hessian-Free Optimization</em> (2010)</a><span class="how">Read the first two sections for the pathological-curvature argument in its original setting &mdash; the paper that made conditioning central.</span></li>
+<li><a href="https://proceedings.neurips.cc/paper/2012/hash/c399862d3b9d6b76c8436e924a68c45b-Abstract.html">Krizhevsky, Sutskever &amp; Hinton, <em>ImageNet Classification with Deep CNNs</em> (2012)</a><span class="how">The initialization and optimization choices in Sections 3&ndash;5 are the practical face of this chapter's theory.</span></li>
+<li><a href="https://cs231n.github.io/neural-networks-3/">Stanford CS231n &mdash; Optimization notes</a><span class="how">The standing reference for step sizes, momentum, and adaptive methods; work the update-rule sections against your Derivation 2.1.</span></li>
+<li><a href="https://distill.pub/2017/momentum/">Goh, <em>Why Momentum Really Works</em> (Distill, 2017)</a><span class="how">An interactive derivation of exactly the \( \sqrt{\kappa} \) result; move the sliders until the geometry is intuitive.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 2 &middot; The Geometry of Training</span>
+  <span><a href="chapter-03.html">Next: The Architecture of Depth &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

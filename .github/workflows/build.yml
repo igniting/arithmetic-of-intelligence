@@ -1,0 +1,42 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install WeasyPrint system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 \
+                                  libcairo2 libgdk-pixbuf-2.0-0
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Audit source
+        run: make audit
+
+      - name: Build PDF
+        run: make pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: the-arithmetic-of-intelligence
+          path: dist/*.pdf

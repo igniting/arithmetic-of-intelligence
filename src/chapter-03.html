@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 3 · The Architecture of Depth — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-02.html">&larr; Chapter 2</a><a href="chapter-04.html">Chapter 4 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 3</span>
+  <h1 class="ch">The Architecture of Depth</h1>
+  <p class="ch-blurb">If optimization is so sensitive to the shape of the loss surface, perhaps we can build networks whose surfaces are easier to descend. That idea, made concrete, is the residual connection.</p>
+</header>
+
+<p class="lead">Suppose you have a network that works at twenty layers and you want one that works at a hundred. You add eighty more layers of the same kind and train it the same way. It gets <em>worse</em> &mdash; and not on held-out data, where you might blame overfitting, but on the training set itself. Something about depth is defeating the optimizer. The fix, when it came, was a single addition sign.</p>
+<p>We begin with the humblest ingredient, the convolution, because its costs are pure counting and because those counts recur every time we compare two designs. Then we turn to the central innovation of the era, the residual connection, and find that its single line of algebra conceals three separate theorems. We close with dilation, a way to see far across an image without paying for the privilege.</p>
+
+<h2>3.1 The arithmetic of convolution</h2>
+<p>A convolutional layer slides a small kernel across a grid, computing at each position a weighted sum of a local patch. Three quantities describe its cost, and all three are bookkeeping. First, the spatial size of the output: for an input of side \( n \), a kernel of side \( k \), padding \( p \), and stride \( s \),</p>
+\[ n_{\text{out}} = \left\lfloor \frac{n + 2p - k}{s} \right\rfloor + 1. \]
+<p>The floor is not a formality &mdash; it is where a great many arithmetic slips are born, because a fractional result must be truncated, not rounded. Second, the parameter count. A layer mapping \( C_{\text{in}} \) input channels to \( C_{\text{out}} \) output channels, with a kernel of side \( k \), holds \( k^2 C_{\text{in}} \) weights per output channel plus one bias each:</p>
+\[ \text{params} = (k^2 C_{\text{in}} + 1)\,C_{\text{out}}. \]
+<p>Forget the \( +1 \) and you will be a bias term short on every layer &mdash; a small error that the exercises will punish. Third, the arithmetic cost: producing one output pixel takes \( k^2 C_{\text{in}} C_{\text{out}} \) multiply&ndash;accumulate operations, and you multiply by the number of output pixels to get the layer's total.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 3.1</span>
+<p class="title">Tracing a dimension through the opening layers</p>
+<p>A \( 227 \times 227 \times 3 \) image enters a layer of 96 kernels, each \( 11 \times 11 \), stride 4, no padding; the result passes through a \( 3 \times 3 \) max-pool at stride 2. Trace the spatial size and count the convolution's parameters.</p>
+<p>Convolution output side: \( \lfloor (227 - 11)/4 \rfloor + 1 = \lfloor 216/4 \rfloor + 1 = 54 + 1 = 55 \). Pooling output side: \( \lfloor (55 - 3)/2 \rfloor + 1 = \lfloor 52/2 \rfloor + 1 = 26 + 1 = 27 \). So the feature map is \( 27 \times 27 \). Parameters in the convolution: \( (11^2 \cdot 3 + 1)\cdot 96 = (363 + 1)\cdot 96 = 364 \cdot 96 = 34{,}944 \). Drop the bias and you get \( 34{,}848 \) &mdash; the classic off-by-a-bias mistake.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 3.1</span>
+<p>A \( 55 \times 55 \) feature map passes through two successive \( 3 \times 3 \) max-pools, each at stride 2, no padding. What is the final spatial side?</p>
+<details><summary>Show answer</summary>
+<p>First pool: \( \lfloor (55-3)/2 \rfloor + 1 = 27 \). Second: \( \lfloor (27-3)/2 \rfloor + 1 = 13 \). Final side \( 13 \).</p>
+</details>
+</div>
+
+<p>One design decision recurs so often it deserves its own note: replacing a single large kernel with a stack of small ones. Two stacked \( 3\times3 \) convolutions see the same \( 5\times5 \) input region as one \( 5\times5 \) convolution &mdash; the receptive fields match &mdash; but the stack holds fewer weights and applies its nonlinearity twice instead of once. For \( C \) channels throughout, one \( 5\times5 \) layer holds \( 25C^2 \) weights; two \( 3\times3 \) layers hold \( 2 \times 9C^2 = 18C^2 \). The stack is cheaper <em>and</em> more expressive, which is why deep stacks of tiny kernels displaced wide ones.</p>
+
+<div class="drill">
+<span class="label">Drill 3.2</span>
+<p>With \( C = 256 \) channels, how many weights are saved by replacing one \( 5\times5 \) convolution with two stacked \( 3\times3 \) convolutions? Give the answer to the nearest thousand.</p>
+<details><summary>Show answer</summary>
+<p>\( 25C^2 - 18C^2 = 7C^2 = 7 \times 65{,}536 = 458{,}752 \), about \( 459{,}000 \).</p>
+</details>
+</div>
+
+<h2>3.2 The residual connection, and the three theorems inside it</h2>
+<p>A residual block does not compute a new representation from scratch; it computes a <em>correction</em> to its input. Writing \( h_\ell \) for the activations after block \( \ell \), a residual block sets</p>
+\[ h_\ell = h_{\ell-1} + F_\ell(h_{\ell-1}), \]
+<p>where \( F_\ell \) is the block's learned transformation. The added \( h_{\ell-1} \) &mdash; the &ldquo;skip&rdquo; or &ldquo;identity&rdquo; path &mdash; looks almost too simple to matter. It matters three separate ways, and untangling them is the heart of this chapter.</p>
+
+<h3>First theorem: the gradient has a floor</h3>
+<p>Consider how a gradient travels backward through the stack. The sensitivity of the output to the input is a product of per-block Jacobians. For a residual block, that Jacobian is \( I + J_\ell \), where \( J_\ell \) is the Jacobian of \( F_\ell \) alone. Across \( L \) blocks,</p>
+\[ \frac{\partial h_L}{\partial h_0} = \prod_{\ell=1}^{L} (I + J_\ell). \]
+<p>Expand this product and something remarkable appears.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 3.1</span>
+<p class="title">The indestructible identity</p>
+<p>Multiplying out \( \prod_{\ell=1}^{L}(I + J_\ell) \), each factor contributes either its \( I \) or its \( J_\ell \). A term that takes \( J \) from exactly \( k \) of the factors, and \( I \) from the rest, is a product of \( k \) Jacobians; there are \( \binom{L}{k} \) such terms. The expansion is thus organized by how many blocks a path passes through:</p>
+\[ \frac{\partial h_L}{\partial h_0} = \underbrace{I}_{k=0} + \underbrace{\sum_\ell J_\ell}_{k=1} + \underbrace{\sum_{i<j} J_j J_i}_{k=2} + \cdots \]
+<p>Look at the \( k=0 \) term: it is the bare identity \( I \), formed by taking \( I \) from every factor. It contains none of the \( J_\ell \), so no amount of shrinking the individual Jacobians can destroy it. However small every \( F_\ell \) becomes, the gradient still contains an undiminished identity path from output to input.</p>
+<p>Contrast a plain network, whose Jacobian is the product \( \prod_\ell J_\ell \) with no added identities. If those Jacobians are even slightly contractive, their product shrinks geometrically with depth &mdash; the vanishing gradient. The residual network's guarantee is exactly the surviving \( I \): a floor beneath the gradient that the plain network lacks.</p>
+</div>
+
+<h3>Second theorem: depth is an ensemble of shallow paths</h3>
+<p>The expansion above has a second reading. Each term is a <em>path</em>: a choice, at each block, of whether to pass through the transformation or skip it. There are \( 2^L \) such paths, and a path's &ldquo;length&rdquo; is the number of blocks it actually traverses. How long is a typical path? Since each block is independently taken or skipped, the length of a random path is a sum of \( L \) independent coin flips &mdash; a binomial distribution, exactly the object Chapter 1 prepared.</p>
+
+<p>Ask yourself first what you expect the answer to be. A network with fifty-four residual blocks contains paths of every length from zero to fifty-four. If you had to guess the typical path length, you might reasonably say &ldquo;most of them are long, since the network is deep.&rdquo; Hold that thought; the arithmetic is about to disagree with it, and the disagreement is the entire reason very deep residual networks train at all.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 3.2</span>
+<p class="title">Most paths are short</p>
+<p>Model each block as traversed with probability \( \tfrac12 \). A path's length is then \( \text{Binomial}(L, \tfrac12) \), with mean \( L/2 \) and variance \( L/4 \). For \( L = 54 \) blocks, the mean length is 27 and the standard deviation is \( \sqrt{54/4} = \sqrt{13.5} = 3.674 \).</p>
+<p>What fraction of paths have length between 20 and 34? Using the normal approximation with a half-unit continuity correction, the standardized endpoints are \( (19.5 - 27)/3.674 = -2.04 \) and \( (34.5 - 27)/3.674 = +2.04 \). The enclosed probability is \( 2\Phi(2.04) - 1 = 2(0.9793) - 1 = 0.959 \).</p>
+<p>So about \( 96\% \) of the paths through a 54-block network &mdash; a network more than a hundred layers deep &mdash; traverse between 20 and 34 blocks. The network behaves less like one very deep chain and more like an <em>ensemble of many moderately shallow paths</em>. Depth, in a residual network, is a reservoir of shallow routes, not a single long one; and gradients flow easily precisely because most routes are short.</p>
+</div>
+
+<h3>Third theorem: signals drift, so normalization belongs inside</h3>
+<p>The third consequence is about scale. Each block adds its correction to the running signal. If those corrections are roughly independent and zero-mean, then by Chapter 1's variance algebra their accumulated effect at any fixed coordinate grows in variance like the number of blocks &mdash; standard deviation like \( \sqrt{L} \).</p>
+
+<div class="box worked">
+<span class="label">Worked Example 3.2</span>
+<p class="title">Square-root drift</p>
+<p>Suppose each of \( L = 100 \) blocks adds, at a fixed output coordinate, an independent zero-mean perturbation of variance \( 0.01 \). The accumulated variance is \( 100 \times 0.01 = 1 \), so the standard deviation is \( 1.0 \) &mdash; comparable to the signal itself. Had we used \( L = 400 \) blocks, the drift would be \( \sqrt{4} = 2 \). The signal swells as it descends the stack.</p>
+<p>This is why normalization layers are placed <em>inside</em> the residual branch, rescaling \( F_\ell \)'s output before it is added, rather than on the skip path. Keep the identity path clean and controlled, and let the normalization tame the drifting correction &mdash; a design that the &ldquo;pre-activation&rdquo; residual block makes explicit.</p>
+</div>
+
+<h3>The bottleneck: buying depth cheaply</h3>
+<p>A last piece of residual arithmetic concerns cost. Very deep networks cannot afford full-width \( 3\times3 \) convolutions at every block, so the bottleneck block compresses the channels first: a \( 1\times1 \) convolution reduces \( C \) channels to \( C/c \), a \( 3\times3 \) operates in that narrow space, and a final \( 1\times1 \) restores the width. Because the expensive \( 3\times3 \) now runs on \( 1/c \) of the channels, it costs \( 1/c^2 \) as much.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 3.3</span>
+<p class="title">Seventeen to one</p>
+<p>Compare, at one spatial position with 256 channels, two stacked \( 3\times3 \) convolutions against a bottleneck with compression \( c=4 \) (256 down to 64). The plain pair costs \( 2 \cdot 9 \cdot 256^2 = 1{,}179{,}648 \) multiply&ndash;accumulates. The bottleneck costs \( (256\cdot 64) + (9\cdot 64^2) + (64\cdot 256) = 16{,}384 + 36{,}864 + 16{,}384 = 69{,}632 \). The ratio is \( 16.9 \), close to 17 to 1. The narrow middle is where nearly all the saving lives.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 3.3</span>
+<p>At compression \( c = 8 \) (256 channels down to 32), estimate the bottleneck's MAC ratio against the plain \( 3\times3 \) pair. (Use the same structure: two \( 1\times1 \) layers plus one \( 3\times3 \) in the narrow space, all at 256 outer channels.)</p>
+<details><summary>Show answer</summary>
+<p>Plain pair \( = 18C^2 \). Bottleneck \( = C\cdot(C/8) + 9(C/8)^2 + (C/8)\cdot C = C^2/8 + 9C^2/64 + C^2/8 = C^2(8/64 + 9/64 + 8/64) = 25C^2/64 \). Ratio \( = 18/(25/64) = 18 \times 64/25 \approx 46 \) to 1.</p>
+</details>
+</div>
+
+<h2>3.3 Dilation: seeing far without paying for it</h2>
+<p>Some tasks &mdash; labeling every pixel of an image, say &mdash; need each output to depend on a wide swath of input, yet must not blur away fine detail by pooling. Dilation resolves the tension. A dilated kernel spreads its taps apart, leaving gaps: a \( 3\times3 \) kernel with dilation \( r \) still has nine weights, but they sample a region \( (2r+1) \) wide. Stacking dilated layers grows the reach geometrically while the parameter count grows not at all per layer.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 3.3</span>
+<p class="title">Exponential reach for linear cost</p>
+<p>Adding a \( 3\times3 \) layer of dilation \( r \) extends the receptive field by \( 2r \) on each axis: its outer taps reach \( r \) beyond the current field on each side. So a stack with dilations \( 1, 2, 4, \dots, 2^{n-1} \) has receptive field</p>
+\[ 1 + 2(1 + 2 + 4 + \cdots + 2^{n-1}) = 1 + 2(2^n - 1) = 2^{n+1} - 1. \]
+<p>An undilated stack, by contrast, grows its field by 2 per layer, reaching only \( 2n + 1 \) after \( n \) layers &mdash; linear, not exponential. To cover a \( 31\times31 \) field, the dilated stack needs \( n = 4 \) layers (\( 2^5 - 1 = 31 \)); the undilated stack needs \( n = 15 \). Same kernels, same per-layer weights; four layers against fifteen.</p>
+<p>The saving against a single wide kernel is even starker. A lone kernel covering a \( 511\times511 \) field would hold \( 511^2 = 261{,}121 \) weights per channel pair; the dilated stack that reaches the same field (\( n = 8 \), since \( 2^9 - 1 = 511 \)) holds \( 8 \times 9 = 72 \). The ratio is about 3,600 to one. Exponential context, linear parameters &mdash; the entire case for dilation in one comparison.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 3.4</span>
+<p>Using \( 3\times3 \) kernels with dilations \( 1, 2, 4, \dots \), find the smallest number of layers whose receptive field reaches at least \( 1000 \). Then give the ratio of a single equivalent kernel's weights to the stack's.</p>
+<details><summary>Show answer</summary>
+<p>\( 2^{n+1} - 1 \ge 1000 \Rightarrow 2^{n+1} \ge 1001 \Rightarrow n+1 \ge 10 \Rightarrow n = 9 \), giving a field of \( 1023 \). Single-kernel weights \( 1023^2 = 1{,}046{,}529 \); stack \( 9 \times 9 = 81 \); ratio \( \approx 12{,}900 \) to one.</p>
+</details>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T5</span>
+<p>Dilation is often misremembered as reducing resolution, like pooling. It does the opposite: it widens the receptive field <em>without</em> downsampling, which is exactly why it suits dense, pixel-level prediction where pooling would throw away the detail you are trying to recover. And the factorization of one \( 5\times5 \) into two \( 3\times3 \) layers is often said to &ldquo;save computation at the cost of expressiveness&rdquo; &mdash; also backwards. The stack is both cheaper and applies an extra nonlinearity; the expressiveness goes <em>up</em>.</p>
+</div>
+
+<h2>3.4 What the chapter bought</h2>
+<p>Convolution arithmetic is the ruler we will measure every later architecture with; keep the floor, the bias, and the multiply&ndash;accumulate count automatic. The residual connection turned out to be three ideas: a gradient floor guaranteed by an indestructible identity term, an ensemble of predominantly shallow paths that makes great depth trainable, and a \( \sqrt{L} \) signal drift that dictates where normalization goes. Dilation buys exponential reach for linear cost. Together these are how architecture began to do the optimizer's work &mdash; shaping the loss surface, and the flow of gradients across it, so that depth became an asset rather than an obstacle. Chapter 4 turns from space to time, and asks the same question about sequences: what makes a recurrent network trainable, and what pins its memory in place?</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>A \( 224\times224 \) input meets a \( 7\times7 \) kernel, stride 2, padding 3. Give the output side.</li>
+<li>A convolution maps 64 channels to 128 with \( 3\times3 \) kernels and biases. Count its parameters.</li>
+<li>For \( L = 20 \) residual blocks, how many distinct forward paths exist, and what is the mean path length?</li>
+<li>A dilated \( 3\times3 \) stack uses dilations \( 1,2,4,8 \). Give its receptive field.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>The path ensemble at 100 blocks.</strong> For \( L = 100 \) residual blocks with each block traversed at probability \( \tfrac12 \), estimate the fraction of paths whose length lies between 40 and 60 inclusive, using the normal approximation with continuity correction.</li>
+<li><strong>Where the saving lives.</strong> Derive the general bottleneck-to-plain MAC ratio as a function of the compression factor \( c \), taking the plain design as two \( 3\times3 \) convolutions at \( C \) channels and the bottleneck as \( 1\times1 \) down, \( 3\times3 \) narrow, \( 1\times1 \) up. Evaluate at \( c = 2 \) and \( c = 4 \), and say what happens as \( c \) grows large.</li>
+<li><strong>Reach versus depth.</strong> You must cover a \( 255\times255 \) receptive field with \( 3\times3 \) kernels. Give the number of dilated layers required, the number of undilated layers required, and the ratio of a single equivalent kernel's weights to the dilated stack's.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>Why identity mappings help twice.</strong> The &ldquo;pre-activation&rdquo; residual block moves normalization and nonlinearity <em>before</em> the convolutions, so the skip path is a clean, unmodified identity. Argue, using Derivation 3.1, why keeping the skip path free of any transformation strengthens the gradient-floor guarantee; then, using Worked Example 3.2, argue why it also helps control the \( \sqrt{L} \) drift. What single principle unifies the two arguments?</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 3 &middot; Pass before Chapter 4</span>
+<p>Reproduce Derivations 3.1 (the identity term) and 3.2 (the path-length binomial) on blank paper, and trace one full convolution-and-pool dimension chain in under three minutes. Attempt B-1 and B-2 closed book. You pass when the three derivations come without hesitation and the arithmetic carries its biases and floors intact.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 3</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/1512.03385">He, Zhang, Ren &amp; Sun, <em>Deep Residual Learning for Image Recognition</em> (2015)</a><span class="how">Read the ablations as experiments about Derivation 3.1 &mdash; the degradation problem is the vanishing gradient this chapter cures.</span></li>
+<li><a href="https://arxiv.org/abs/1603.05027">He et al., <em>Identity Mappings in Deep Residual Networks</em> (2016)</a><span class="how">The pre-activation block of the C-challenge, argued in full; compare their reasoning to yours.</span></li>
+<li><a href="https://arxiv.org/abs/1605.06431">Veit, Wilber &amp; Belongie, <em>Residual Networks Behave Like Ensembles of Relatively Shallow Networks</em> (2016)</a><span class="how">Derivation 3.2, measured: they delete blocks at test time and watch the ensemble degrade gracefully.</span></li>
+<li><a href="https://arxiv.org/abs/1511.07122">Yu &amp; Koltun, <em>Multi-Scale Context Aggregation by Dilated Convolutions</em> (2015)</a><span class="how">The origin of Derivation 3.3; note how the exponential schedule is chosen for dense prediction.</span></li>
+<li><a href="https://cs231n.github.io/convolutional-networks/">Stanford CS231n &mdash; Convolutional Networks</a><span class="how">The standing reference for the arithmetic of Section 3.1; work its worked examples against yours.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 3 &middot; The Architecture of Depth</span>
+  <span><a href="chapter-04.html">Next: Memory and Gates &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

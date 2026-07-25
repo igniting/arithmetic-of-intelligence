@@ -1,0 +1,15 @@
+{
+  "name": "arithmetic-of-intelligence",
+  "version": "1.0.0",
+  "description": "The Arithmetic of Intelligence — a problem course in modern machine learning",
+  "private": true,
+  "scripts": {
+    "prerender": "node build/prerender.js"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.0.0",
+    "@fontsource/source-serif-4": "^5.0.0",
+    "@fontsource/zilla-slab": "^5.0.0",
+    "katex": "^0.16.9"
+  }
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Arithmetic of Intelligence — A Problem Course in Modern Machine Learning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="page">
+
+<header class="cover">
+  <div class="cover-fig"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" class="coverfig">
+  <defs>
+    <pattern id="gp" width="26" height="26" patternUnits="userSpaceOnUse">
+      <path d="M 26 0 L 0 0 0 26" fill="none" stroke="#2B5DA8" stroke-width="0.6" opacity="0.10"/>
+    </pattern>
+    <pattern id="gp5" width="130" height="130" patternUnits="userSpaceOnUse">
+      <path d="M 130 0 L 0 0 0 130" fill="none" stroke="#2B5DA8" stroke-width="0.9" opacity="0.16"/>
+    </pattern>
+  </defs>
+
+  <rect width="1000" height="620" fill="url(#gp)"/>
+  <rect width="1000" height="620" fill="url(#gp5)"/>
+
+  <ellipse cx="520.0" cy="310.0" rx="22.11" ry="3.75" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.40"/><ellipse cx="520.0" cy="310.0" rx="40.82" ry="6.93" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.37"/><ellipse cx="520.0" cy="310.0" rx="63.25" ry="10.74" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.34"/><ellipse cx="520.0" cy="310.0" rx="90.68" ry="15.40" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.31"/><ellipse cx="520.0" cy="310.0" rx="122.93" ry="20.88" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.28"/><ellipse cx="520.0" cy="310.0" rx="159.86" ry="27.15" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.25"/><ellipse cx="520.0" cy="310.0" rx="202.76" ry="34.43" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.22"/><ellipse cx="520.0" cy="310.0" rx="251.66" ry="42.74" fill="none" stroke="#2B5DA8" stroke-width="1.05" opacity="0.19"/>
+
+  <!-- valley floor -->
+  <line x1="80.0" y1="310.0" x2="960.0" y2="310.0"
+        stroke="#1C2733" stroke-width="0.7" stroke-dasharray="5 5" opacity="0.30"/>
+
+  <!-- plain gradient descent: ricochets across the valley -->
+  <path d="M 853.33,117.53 L 846.73,498.62 L 840.26,125.15 L 833.92,491.15 L 827.71,132.47 L 821.61,483.98 L 815.64,139.50 L 809.79,477.09 L 804.05,146.25 L 798.43,470.47 L 792.91,152.74 L 787.51,464.12 L 782.21,158.97 L 777.02,458.01 L 771.93,164.95 L 766.94,452.15 L 762.05,170.69 L 757.26,446.52 L 752.56,176.21 L 747.96,441.12 L 743.45,181.51 L 739.02,435.92 L 734.69,186.59 L 730.43,430.94 L 726.27,191.48 L 722.18,426.15 L 718.18,196.17 L 714.26,421.55 L 710.41,200.68 L 706.64,417.13 L 702.94,205.01 L 699.32,412.89 L 695.77,209.17 L 692.29,408.81 L 688.88,213.16 L 685.54,404.90 L 682.26,217.00 L 679.05,401.14 L 675.90,220.68 L 672.81,397.53 L 669.78,224.22 L 666.82,394.07 L 663.91,227.61 L 661.06,390.74 L 658.27,230.88 L 655.53,387.54 L 652.85,234.01 L 650.22,384.47 L 647.64,237.02 L 645.11,381.52 L 642.63,239.91 L 640.21,378.69 L 637.83,242.68 L 635.49,375.97 L 633.21,245.35 L 630.97,373.36 L 628.77,247.91 L 626.61,370.85 L 624.50,250.37 L 622.43,368.44 L 620.41,252.73 L 618.42,366.12 L 616.47,255.00 L 614.56,363.90 L 612.69,257.18 L 610.85,361.77 L 609.05,259.27 L 607.29,359.72 L 605.56,261.28 L 603.87,357.75 L 602.21,263.21" fill="none" stroke="#A64B2A" stroke-width="1.7"
+        stroke-linejoin="round" opacity="0.92"/>
+
+  <!-- momentum: glides along the floor -->
+  <path d="M 853.33,117.53 L 850.67,271.51 L 845.62,440.88 L 838.48,488.61 L 829.50,388.68 L 818.94,235.80 L 807.05,157.57 L 794.05,209.10 L 780.15,336.20 L 765.57,429.63 L 750.48,418.01 L 735.05,321.14 L 719.45,225.05 L 703.81,206.52 L 688.27,272.63 L 672.93,362.02 L 657.90,400.86 L 643.28,363.12 L 629.13,286.66 L 615.52,236.52 L 602.51,250.17 L 590.14,310.33 L 578.44,364.20 L 567.45,369.33 L 557.17,326.48 L 547.63,274.73 L 538.82,256.37 L 530.74,282.75 L 523.38,328.29 L 516.74,354.64 L 510.78,342.65 L 505.49,305.73 L 500.85,275.92 L 496.82,276.36 L 493.38,303.66 L 490.50,333.31 L 488.14,341.34 L 486.28,323.50 L 484.87,296.64 L 483.88,283.16 L 483.28,292.49 L 483.03,314.90 L 483.11,331.15 L 483.47,328.85 L 484.09,311.70 L 484.93,294.91 L 485.97,291.87 L 487.18,303.64 L 488.53,319.32 L 489.99,325.98 L 491.55,319.19 L 493.19,305.73 L 494.87,297.03 L 496.58,299.58 L 498.31,310.21 L 500.05,319.61 L 501.76,320.38 L 503.46,312.77 L 505.11,303.70 L 506.72,300.58 L 508.28,305.30 L 509.77,313.31 L 511.19,317.87 L 512.55,315.68 L 513.82,309.16 L 515.02,303.97 L 516.14,304.12 L 517.18,308.96 L 518.14,314.15 L 519.01,315.50 L 519.81,312.31" fill="none" stroke="#1E4176" stroke-width="2.6"
+        stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- start and minimum -->
+  <circle cx="853.3" cy="117.5" r="5" fill="#1C2733"/>
+  <circle cx="520.0" cy="310.0" r="3.4" fill="none" stroke="#1C2733" stroke-width="1.6"/>
+  <circle cx="520.0" cy="310.0" r="8.5" fill="none" stroke="#1C2733" stroke-width="0.7" opacity="0.45"/>
+</svg></div>
+  <div class="cover-cap">Gradient descent and momentum on an ill-conditioned valley &mdash; Chapter 2</div>
+  <hr class="cover-rule">
+  <h1 class="title">The Arithmetic<br>of Intelligence</h1>
+  <p class="subtitle">A problem course in modern machine learning, from the pathological valley to direct preference optimization.</p>
+  <div class="cover-author">Anshu Avinash</div>
+</header>
+
+<h2>Preface</h2>
+<p class="lead">This book teaches machine learning the way physics is taught to engineers: as a small set of results you derive, drill, and then recognize everywhere.</p>
+<p>Most introductions to the field are surveys. They tell you <em>that</em> residual connections help, <em>that</em> larger models should see more data, <em>that</em> a preference-tuning method called DPO replaced a more complicated pipeline. A survey leaves you fluent in names and helpless in front of a design decision. When someone asks whether your serving cluster is memory-bound, whether a benchmark jump is capability or measurement, or why a reinforcement-learning recipe deleted its critic network, the names do not answer. A short calculation does.</p>
+<p>The premise here is that modern machine learning &mdash; for all its scale and noise &mdash; rests on roughly forty short calculations. Each is the kind of thing a first-year engineering student could do, if someone set it up properly: a stability condition, a variance count, a constrained minimization, a geometric series, a Bayes flip. The field's landmark papers are these calculations wearing costumes. Learn the calculations and the costumes turn transparent; when next quarter's paper arrives, you will see within a page which budget it spends and which derivation prices it.</p>
+<p>Accordingly, nothing in this book asks you to memorize a benchmark score, a release date, or an author list. Where a constant from the literature is needed &mdash; a scaling exponent, a data-law slope, an accelerator's bandwidth &mdash; it is <em>given</em>, the way <span class="keynum">g = 9.8 m/s&sup2;</span> is given in a physics paper. What is never given is the model you must build to use it. That is the work, and it is the only thing examined.</p>
+<p>The book covers two eras in one arc. Part II is the classical era, 2012&ndash;2022: why training deep networks was hard, what architecture did about it, how scale became a budgeting problem, and why compression is the master currency underneath all of it. Part III is the modern era, 2022 onward: the economics of inference, attention rebuilt around memory traffic, sparsity and thrift, the alignment pipeline, inference-time reasoning, diffusion, and the full-lifecycle cost of a deployed model. The ordering inside Part III is deliberate &mdash; systems before alignment &mdash; because without the cost vocabulary of bytes, bandwidth, and budgets, the alignment era's design choices read as fashion instead of forced moves.</p>
+
+<h2>How to use this book</h2>
+<h3>The unit of progress is a derivation, not a chapter</h3>
+<p>Appendix A lists the thirty-eight core derivations. You are done with a chapter when you can produce its derivations on blank paper, unprompted &mdash; not when you have read it. Three of them (the compute-optimal allocation of Chapter 6, the DPO collapse of Chapter 13, and one you meet early in Chapter 2) carry a special protocol: reproduce them from nothing on three separate days before moving on.</p>
+<h3>Work every drill; keep an error log</h3>
+<p>Drills appear inside sections with their answers one click away; end-of-chapter exercise sets are graded <strong>A</strong> (drills), <strong>B</strong> (problems), and <strong>C</strong> (challenges), with full solutions in Appendix D. Keep a notebook with one line per mistake: what you did, what was right, and which trap class it belongs to. The trap taxonomy (Appendix B) names the ten ways students reliably go wrong. Twenty hours of honest error-logging is worth more than any rereading.</p>
+<h3>Let code confirm the math</h3>
+<p>From Chapter 10 onward a lab manual (Appendix C) runs in parallel. Every lab's acceptance criterion is a number your derivation predicted: your streaming softmax must match a library implementation to six decimal places; your preference-tuning loss must begin at exactly ln&nbsp;2 &mdash; and you must prove why before you run it. When code and derivation disagree, one of them is wrong, and finding which is the curriculum.</p>
+
+<div class="note gate">
+<span class="label">Prerequisites</span>
+<p>School-level mathematics &mdash; logarithms, elementary calculus, basic probability &mdash; and, for the labs, working Python. Chapter 1 sharpens exactly six mathematical reflexes and nothing else; if its gate feels easy, skip ahead without guilt.</p>
+</div>
+
+<h2>Contents</h2>
+
+<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-dk);margin:36px 0 6px">Part I &middot; Foundations</div>
+<ol style="list-style:none;margin-left:0">
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">1</span><span style="flex:1"><a href="chapter-01.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Mathematical Toolkit</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Six reflexes: power laws, variance algebra, the binomial, constrained minima, geometric series, counting in bits</span></span></li>
+</ol>
+
+<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-dk);margin:36px 0 6px">Part II &middot; The Classical Era (2012&ndash;2022)</div>
+<ol style="list-style:none;margin-left:0">
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">2</span><span style="flex:1"><a href="chapter-02.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Geometry of Training</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">The pathological valley, conditioning, momentum's &radic;&kappa;, and the statistics of initialization</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">3</span><span style="flex:1"><a href="chapter-03.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Architecture of Depth</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Convolution arithmetic, the indestructible identity, depth as an ensemble of shallow paths, dilation</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">4</span><span style="flex:1"><a href="chapter-04.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Memory and Gates</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Gradient horizons, the forget gate's bias, why dropout must respect the recurrent path, data power laws</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">5</span><span style="flex:1"><a href="chapter-05.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Attention</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Score statistics and &radic;d, cost crossovers, path lengths, and the reversal trick's unchanged mean</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">6</span><span style="flex:1"><a href="chapter-06.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Economics of Scale</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">The compute-optimal allocation, exponent-weighted balance, and what a halving of loss really costs</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">7</span><span style="flex:1"><a href="chapter-07.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Machinery of Scale</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Pipeline bubbles from a timing diagram, sharding arithmetic, and the memory wall</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">8</span><span style="flex:1"><a href="chapter-08.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Measurement</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Emergence as a property of the ruler, contamination algebra, and the Bayes of a leaked benchmark</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">9</span><span style="flex:1"><a href="chapter-09.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Compression and Occam</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">MDL in five costumes, the length prior's theorem, grokking, double descent, and a measure of intelligence</span></span></li>
+</ol>
+
+<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-dk);margin:36px 0 6px">Part III &middot; The Modern Era (2022&ndash; )</div>
+<ol style="list-style:none;margin-left:0">
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">10</span><span style="flex:1"><a href="chapter-10.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Price of a Token</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">KV caches, rooflines, and why decoding is a memory problem</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">11</span><span style="flex:1"><a href="chapter-11.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Bytes over FLOPs</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Online softmax, IO-aware attention, and the exact economics of speculative decoding</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">12</span><span style="flex:1"><a href="chapter-12.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Sparsity and Thrift</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Mixture-of-experts accounting, quantization error, and LoRA's attack on the optimizer budget</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">13</span><span style="flex:1"><a href="chapter-13.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Teaching Preferences</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Bradley&ndash;Terry, PPO's pessimism, the DPO collapse, and GRPO's deleted critic</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">14</span><span style="flex:1"><a href="chapter-14.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Thinking at Inference Time</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Coverage versus selection, matched-compute comparisons, and what elicits versus what creates</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">15</span><span style="flex:1"><a href="chapter-15.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Generation by Denoising</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">The closed-form forward process, signal-to-noise schedules, and guidance as extrapolation</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">16</span><span style="flex:1"><a href="chapter-16.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Whole Lifecycle</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Training cost plus serving cost, break-even lifetimes, distillation, and the four budgets</span></span></li>
+</ol>
+
+<div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-dk);margin:36px 0 6px">Appendices</div>
+<ol style="list-style:none;margin-left:0">
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">A</span><span style="flex:1"><a href="appendix-a.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Derivation Bank</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">All thirty-eight results, stated for blank-paper reproduction</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">B</span><span style="flex:1"><a href="appendix-b.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Trap Taxonomy</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Ten classes of reliable error, with diagnostics</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">C</span><span style="flex:1"><a href="appendix-c.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">The Lab Manual</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Eight builds, each accepted only when it matches a predicted number</span></span></li>
+  <li style="display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid var(--rule)"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--blue);min-width:2.4em;font-weight:600">D</span><span style="flex:1"><a href="appendix-d.html" style="font-family:'Zilla Slab',serif;font-weight:600;font-size:18px;color:var(--ink)">Solutions</a><span style="display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px">Worked answers to the B and C exercises, and the final examination blueprint</span></span></li>
+</ol>
+
+<footer>
+  <span>The Arithmetic of Intelligence &middot; Anshu Avinash</span>
+  <span>Zilla Slab &middot; Source Serif 4 &middot; IBM Plex Mono</span>
+</footer>
+</div>
+</body>
+</html>

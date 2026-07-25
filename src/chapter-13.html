@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 13 · Teaching Preferences — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-12.html">&larr; Chapter 12</a><a href="chapter-14.html">Chapter 14 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 13</span>
+  <h1 class="ch">Teaching Preferences</h1>
+  <p class="ch-blurb">Pretraining produces a model of what text is. Post-training bends it toward what an answer should be. The pipeline that does this collapsed, in one derivation, from a reinforcement-learning apparatus into a supervised loss.</p>
+</header>
+
+<p class="lead">Pretraining gives you a model of what text <em>is</em>. What you usually want is a model of what a good answer <em>looks like</em>, and the two are not the same. Getting from one to the other used to require a reward model, a reinforcement-learning loop, and a second network to estimate baselines. Then someone noticed that a term in the algebra cancels, and most of that apparatus disappeared.</p>
+<p>We proceed in four stages. First, how human comparisons become a numerical score. Second, how a policy is trained against that score without drifting into nonsense. Third, the collapse itself, which removes most of the machinery the first two stages introduced. Fourth, a variant that deletes what remains of it, and which now underpins how reasoning models are trained.</p>
+
+<h2>13.1 From comparisons to a reward</h2>
+<p>People are unreliable at scoring a response in isolation and reliable at comparing two. So the data are preference pairs: given a prompt, response \( y_w \) was preferred to \( y_l \). The standard model of such comparisons assumes an underlying scalar reward \( r \) and sets the probability of the observed preference to a logistic function of the reward difference:</p>
+\[ P(y_w \succ y_l) = \sigma\bigl(r(y_w) - r(y_l)\bigr). \]
+<p>Fitting \( r \) means minimizing \( -\log\sigma(r_w - r_l) \) over the dataset. One structural fact matters enormously and is easy to miss.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 13.1</span>
+<p class="title">Only differences are identified</p>
+<p>The loss depends on \( r_w \) and \( r_l \) only through their difference. Adding any constant \( \kappa \) to every reward leaves \( (r_w + \kappa) - (r_l + \kappa) = r_w - r_l \) unchanged, so the loss is identical. The reward function is therefore determined only up to an additive constant &mdash; there is no meaningful &ldquo;absolute&rdquo; reward scale, and any claim resting on one is unfounded.</p>
+<p><em>Check numerically.</em> With \( r_w = 1.2 \) and \( r_l = 0.7 \), the loss is \( -\ln\sigma(0.5) = -\ln 0.622 = \) <span class="keynum">0.474</span> nats. Shift both by \( +100 \): the difference is still \( 0.5 \) and the loss is still \( 0.474 \).</p>
+</div>
+
+<h2>13.2 Optimizing against a reward, on a leash</h2>
+<p>Given a reward, one could simply maximize it. One should not. A policy that maximizes a learned reward without constraint will find the regions where the reward model is wrong and exploit them &mdash; the engineering face of the reward-seizing argument from Chapter 9. The remedy is a leash: penalize divergence from the pretrained reference policy \( \pi_{\text{ref}} \). The objective becomes</p>
+\[ \max_{\pi}\ \mathbb{E}_{y\sim\pi}\bigl[r(x,y)\bigr] - \beta\,\mathrm{KL}\bigl(\pi \,\|\, \pi_{\text{ref}}\bigr), \]
+<p>with \( \beta \) setting how tight the leash is. This objective &mdash; reward minus a scaled divergence from the reference &mdash; is the target for the rest of the chapter. <em>Every method below optimizes this same objective; they differ only in how.</em></p>
+<p>The classical optimizer is a policy-gradient method with a clipped surrogate. Writing \( \rho = \pi(y)/\pi_{\text{old}}(y) \) for the probability ratio against the policy that generated the data and \( A \) for the advantage, the surrogate is</p>
+\[ \min\bigl(\rho A,\ \operatorname{clip}(\rho,\,1-\epsilon,\,1+\epsilon)\,A\bigr). \]
+<p>The \( \min \) makes the objective <em>pessimistic</em>: it always takes the less favorable of the clipped and unclipped values, in both directions.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 13.1</span>
+<p class="title">Where the clip kills the gradient</p>
+<p>Take \( \epsilon = 0.2 \).</p>
+<p><strong>Case (i):</strong> \( \rho = 1.3 \), \( A = +2 \). Unclipped gives \( 2.6 \); clipped gives \( 1.2 \times 2 = 2.4 \). The minimum is \( 2.4 \), the clipped branch &mdash; which is constant in \( \rho \), so the <strong>gradient is zero</strong>. The policy has already moved far enough in the profitable direction; further movement earns nothing.</p>
+<p><strong>Case (ii):</strong> \( \rho = 0.7 \), \( A = -1 \). Unclipped gives \( -0.7 \); clipped gives \( 0.8 \times (-1) = -0.8 \). The minimum is \( -0.8 \), again the clipped branch, again zero gradient. Pessimism applies symmetrically.</p>
+<p>For \( \rho \) inside \( [0.8, 1.2] \), clipped and unclipped agree and the gradient flows normally. The clip is a trust region enforced by making excursions unprofitable rather than forbidden.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 13.1</span>
+<p>With \( \epsilon = 0.2 \), give the surrogate value and say whether the gradient is alive, for \( A = +1 \) at \( \rho = 0.7 \), and for \( A = -1 \) at \( \rho = 1.3 \).</p>
+<details><summary>Show answers</summary>
+<p>\( A=+1, \rho=0.7 \): unclipped \( 0.7 \), clipped \( 0.8 \); min is \( 0.7 \) &mdash; the <em>unclipped</em> branch, so gradient alive. \( A=-1, \rho=1.3 \): unclipped \( -1.3 \), clipped \( -1.2 \); min is \( -1.3 \) &mdash; unclipped, gradient alive. Only the two cases in Worked Example 13.1 are clipped.</p>
+</details>
+</div>
+
+<h2>13.3 The collapse</h2>
+<p>Now the chapter's centerpiece. The KL-regularized objective of Section 13.2 has a closed-form optimum. Knowing it lets us eliminate the reward model entirely.</p>
+
+<p>Read the next derivation slowly; it is three short moves and the third one is the whole discovery. If you have seen this result stated before, you may remember it as &ldquo;the partition function is intractable, so we ignore it.&rdquo; That is not what happens, and the difference is the point. The term is never ignored and never approximated. It is carried through the algebra in full and then, at the last step, it eliminates itself &mdash; for a reason you can see coming if you watch what the preference model does with two responses to the <em>same</em> prompt.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 13.2 &middot; the crown jewel</span>
+<p class="title">From a reinforcement-learning objective to a supervised loss</p>
+<p><strong>Move 1 &mdash; the optimum.</strong> Maximizing \( \mathbb{E}_\pi[r] - \beta\,\mathrm{KL}(\pi\|\pi_{\text{ref}}) \) over distributions \( \pi \) is a standard variational problem whose solution is the reference tilted by the exponentiated reward:</p>
+\[ \pi^*(y\mid x) = \frac{1}{Z(x)}\,\pi_{\text{ref}}(y\mid x)\,e^{\,r(x,y)/\beta}, \]
+<p>where \( Z(x) = \sum_y \pi_{\text{ref}}(y\mid x)e^{r(x,y)/\beta} \) is a normalizing constant. \( Z \) is intractable &mdash; it sums over all possible responses &mdash; which is why this form alone does not give an algorithm.</p>
+<p><strong>Move 2 &mdash; invert.</strong> Solve the same equation for the reward:</p>
+\[ r(x,y) = \beta \log\frac{\pi^*(y\mid x)}{\pi_{\text{ref}}(y\mid x)} + \beta\log Z(x). \]
+<p>The reward is a log-ratio of the optimal policy to the reference, plus an intractable term that depends only on the prompt \( x \), not on the response \( y \).</p>
+<p><strong>Move 3 &mdash; substitute, and watch \( Z \) cancel.</strong> The preference model of Section 13.1 involves only the <em>difference</em> of two rewards for the same prompt. Substituting,</p>
+\[ r(x,y_w) - r(x,y_l) = \beta\log\frac{\pi^*(y_w)}{\pi_{\text{ref}}(y_w)} - \beta\log\frac{\pi^*(y_l)}{\pi_{\text{ref}}(y_l)} + \underbrace{\beta\log Z(x) - \beta\log Z(x)}_{=\ 0}. \]
+<p>The intractable term cancels exactly, because it is the same for both responses. Putting this difference into the Bradley&ndash;Terry loss gives a loss over the policy alone:</p>
+\[ \mathcal{L} = -\log\sigma\!\left(\beta\log\frac{\pi(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right). \]
+<p>No reward model. No sampling loop. No value network. A supervised loss on preference pairs that optimizes the same KL-regularized objective. The whole apparatus collapsed because an intractable constant was identical on both sides of a difference &mdash; the same cancellation-by-differencing that made Section 13.1's rewards identifiable only up to a constant.</p>
+</div>
+
+<p>The gradient has an instructive shape. Writing \( M \) for the margin inside the logistic, the loss is \( -\log\sigma(M) \) and its derivative carries a factor \( \sigma(-M) \). Pairs the model currently gets <em>wrong</em> &mdash; small or negative margin &mdash; receive weight near 1; pairs it already handles well receive vanishing weight. The method automatically concentrates on what it has not yet learned.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 13.2</span>
+<p class="title">One step, by hand</p>
+<p>Let \( \beta = 0.2 \), with log-ratios \( \log\frac{\pi(y_w)}{\pi_{\text{ref}}(y_w)} = 1.0 \) and \( \log\frac{\pi(y_l)}{\pi_{\text{ref}}(y_l)} = -0.5 \).</p>
+<p>Margin: \( M = 0.2\,(1.0 - (-0.5)) = 0.3 \). Loss: \( -\ln\sigma(0.3) = -\ln 0.574 = \) <span class="keynum">0.554</span> nats. Gradient weight: \( \sigma(-0.3) = 0.426 \).</p>
+<p>Train further until the margin reaches \( 1.0 \): the weight falls to \( \sigma(-1) = 0.269 \). The pair now matters less &mdash; exactly the desired behavior.</p>
+<p><em>A sanity check worth remembering.</em> At initialization the policy <em>is</em> the reference, so both log-ratios are zero, the margin is zero, and the loss is \( -\ln\sigma(0) = \ln 2 = \) <span class="keynum">0.693</span>. Any implementation whose loss does not begin at \( \ln 2 \) has a bug. This is the acceptance criterion for Lab 6.</p>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T8 &middot; objective versus estimator</span>
+<p>This derivation changed the <em>estimator</em>, not the objective. Both the clipped policy-gradient method and the collapsed loss optimize the same KL-regularized target; one does it by sampling and one by a closed-form substitution. Statements like &ldquo;the direct method optimizes a different alignment goal&rdquo; are false as stated. A second, subtler error: dropping \( Z \) too early. It does not vanish because it is small or ignorable &mdash; it vanishes because it is <em>identical on both sides of a difference</em>. That cancellation is the entire discovery, and a derivation that discards \( Z \) before taking the difference has skipped the content.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 13.2</span>
+<p>With \( \beta = 0.1 \) and log-ratios \( 0.8 \) and \( 0.2 \), give the margin, the loss in nats, and the gradient weight.</p>
+<details><summary>Show answers</summary>
+<p>Margin \( = 0.1(0.8-0.2) = 0.06 \). Loss \( = -\ln\sigma(0.06) = -\ln 0.515 = 0.664 \) nats. Weight \( = \sigma(-0.06) = 0.485 \).</p>
+</details>
+</div>
+
+<h2>13.4 Deleting the critic</h2>
+<p>Policy-gradient training needs a baseline to reduce variance, conventionally supplied by a learned value network of roughly the policy's size. Chapter 7's arithmetic makes the cost concrete: carrying policy and critic together roughly doubles the memory bill. An alternative computes the baseline from data instead of a network: sample a <em>group</em> of \( G \) responses to the same prompt, and standardize their rewards within the group,</p>
+\[ \hat A_i = \frac{r_i - \bar r}{s_r}, \]
+<p>where \( \bar r \) and \( s_r \) are the group's mean and standard deviation. The group supplies its own baseline; no critic is needed. This suits <em>verifiable</em> rewards especially well &mdash; mathematics and code, where a checker returns 1 or 0 &mdash; which is why it underpins modern reasoning training.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 13.3</span>
+<p class="title">Group advantages, and a degenerate case</p>
+<p>A group of five responses earns rewards \( (1,1,1,0,0) \). Mean \( \bar r = 0.6 \); variance \( = \frac{3(0.4)^2 + 2(0.6)^2}{5} = \frac{0.48+0.72}{5} = 0.24 \), so \( s_r = 0.49 \). Advantages: correct responses get \( 0.4/0.49 = \) <span class="keynum">+0.82</span>, incorrect get \( -0.6/0.49 = \) <span class="keynum">&minus;1.22</span>.</p>
+<p>Now the case that must be known: a group where <em>all</em> responses are correct, or all incorrect. Then every \( r_i \) equals the mean, every numerator is zero, and <strong>every advantage is zero</strong> &mdash; the group contributes no learning signal at all. This is the arithmetic reason such training curates prompts near the edge of the model's ability: problems it always solves and problems it never solves are both worthless.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 13.3</span>
+<p>A group of eight responses earns \( (1,0,0,0,0,0,0,0) \). Give all eight advantages.</p>
+<details><summary>Show answer</summary>
+<p>Mean \( = 0.125 \); variance \( = \frac{(0.875)^2 + 7(0.125)^2}{8} = \frac{0.7656+0.1094}{8} = 0.1094 \), \( s_r = 0.331 \). Correct: \( 0.875/0.331 = +2.65 \). Each incorrect: \( -0.125/0.331 = -0.378 \).</p>
+</details>
+</div>
+
+<h2>13.5 What the chapter bought</h2>
+<p>Preferences become a reward through a logistic model of comparisons, identified only up to an additive constant. Optimization against that reward must be leashed to a reference policy, or it degenerates into exploiting the reward model's errors. The leashed objective has a closed-form optimum, and inverting it and substituting into the preference model cancels the intractable normalizer &mdash; collapsing the whole pipeline into a supervised loss whose gradient automatically weights the pairs still being gotten wrong. And replacing a learned baseline with a group's own statistics deletes the critic, halving the memory and fitting verifiable-reward tasks exactly. Chapter 14 takes up what happens when the model is asked to spend more compute at answer time rather than training time.</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>Rewards \( r_w = 2.0 \), \( r_l = 1.1 \). Give the preference loss in nats. Then add 50 to both and give it again.</li>
+<li>With \( \epsilon = 0.15 \), state for which \( \rho \) the clip is active when \( A > 0 \).</li>
+<li>\( \beta = 0.5 \), log-ratios \( 0.4 \) and \( 0.1 \). Give margin, loss, and gradient weight.</li>
+<li>A group earns \( (1,1,0,0) \). Give the four advantages.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>The clip table.</strong> With \( \epsilon = 0.2 \), tabulate the surrogate value for \( A = +1 \) and \( A = -1 \) at \( \rho \in \{0.7, 1.0, 1.3\} \) &mdash; six cells &mdash; and mark which have zero gradient. State in one sentence what the pattern means for how far a single update may move the policy.</li>
+<li><strong>The collapse, reproduced.</strong> Starting from the KL-regularized objective, state the closed-form optimum, invert it for the reward, substitute into the Bradley&ndash;Terry preference probability, and show explicitly where and why the normalizer cancels. Write the resulting loss. Then explain, in one sentence, why the cancellation would fail if the two responses came from <em>different</em> prompts.</li>
+<li><strong>The cost of a critic.</strong> For a 7-billion-parameter policy trained in half precision, estimate total training memory with and without a critic of the same size, taking roughly 20 bytes per parameter for weights, gradients, and optimizer state combined. Give both figures and the ratio.</li>
+<li><strong>Degenerate groups.</strong> Show algebraically that a group whose rewards are all equal yields zero advantage for every member, regardless of the common value. Explain what this implies for curriculum design in verifiable-reward training.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>Two cancellations, one technique.</strong> In Section 13.1 the reward's additive constant is unidentifiable because the loss sees only differences. In Section 13.3 the intractable normalizer cancels because it is the same for both responses to a prompt. Argue that these are the same mathematical phenomenon, state the general principle at work, and find one further place in this book where an inconvenient quantity is eliminated by the same manoeuvre. (Chapters 6 and 9 both contain candidates.)</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 13 &middot; Pass before Chapter 14 &mdash; three-days protocol</span>
+<p>Reproduce Derivation 13.2 &mdash; all three moves, with the cancellation shown explicitly &mdash; on blank paper, from nothing, on three separate days. Do not reread between attempts. Also reproduce the clip table (B-1) perfectly and the group-advantage computation including the degenerate case. This is the third and last protocol derivation, and it is the one most likely to be asked of you in a professional setting: the collapse is short, elegant, and widely misremembered.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 13</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/2203.02155">Ouyang et al., <em>Training Language Models to Follow Instructions with Human Feedback</em> (2022)</a><span class="how">Section 3 and Figure 2 &mdash; the full pipeline in one picture, before the collapse simplified it.</span></li>
+<li><a href="https://arxiv.org/abs/2305.18290">Rafailov et al., <em>Direct Preference Optimization</em> (2023)</a><span class="how">Section 4 and Appendix A. Read it only <em>after</em> your first blank-paper attempt at Derivation 13.2, then compare.</span></li>
+<li><a href="https://arxiv.org/abs/1707.06347">Schulman et al., <em>Proximal Policy Optimization Algorithms</em> (2017)</a><span class="how">Section 3 for the clipped surrogate of Worked Example 13.1.</span></li>
+<li><a href="http://joschu.net/blog/kl-approx.html">Schulman, <em>Approximating KL Divergence</em></a><span class="how">Short and load-bearing: how the leash of Section 13.2 is actually estimated in practice.</span></li>
+<li><a href="https://arxiv.org/abs/2402.03300">Shao et al., <em>DeepSeekMath</em> (2024)</a><span class="how">The group-relative method of Section 13.4, in its original presentation.</span></li>
+<li><a href="https://arxiv.org/abs/2501.12948">DeepSeek-AI, <em>DeepSeek-R1</em> (2025)</a><span class="how">Read the training recipe and label every arrow with the chapter of this book that prices it.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 13 &middot; Teaching Preferences</span>
+  <span><a href="chapter-14.html">Next: Thinking at Inference Time &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

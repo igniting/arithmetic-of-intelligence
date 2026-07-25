@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 14 · Thinking at Inference Time — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-13.html">&larr; Chapter 13</a><a href="chapter-15.html">Chapter 15 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 14</span>
+  <h1 class="ch">Thinking at Inference Time</h1>
+  <p class="ch-blurb">Compute can be spent when the answer is needed, not only when the model is built. But sampling more answers only helps if you can tell which one is right &mdash; and that distinction decides everything.</p>
+</header>
+
+<p class="lead">All the compute so far has been spent before the user arrives. But you can also spend it afterwards: sample the same question ten times, or a hundred, and pick the best answer. Whether that helps turns entirely on a question people routinely skip &mdash; if a correct answer is somewhere in your hundred samples, how exactly do you intend to find it?</p>
+
+<h2>14.1 Coverage: the arithmetic of many attempts</h2>
+<p>Sample \( k \) independent attempts at a problem, each succeeding with probability \( p \). The probability that <em>at least one</em> succeeds is one minus the probability all fail:</p>
+\[ \text{coverage}(k) = 1 - (1-p)^{k}. \]
+<p>This grows quickly &mdash; faster than most people expect, which is exactly what makes the next point so easy to miss. A model that solves a problem one time in twenty covers half of such problems within fourteen attempts. But note carefully what has been computed: the probability that a correct answer is <em>somewhere in the set</em>. Whether you can deliver it depends on whether you can identify it.</p>
+
+<div class="box trap">
+<span class="label">Trap &middot; T4 &middot; coverage is not accuracy</span>
+<p>Coverage is the most over-quoted number in this part of the field. It measures whether a correct answer exists among the samples, not whether the system returns one. You only realize coverage in production if you have a <em>selector</em> &mdash; a verifier, a test suite, a reward model &mdash; that picks the right sample. Reporting coverage as though it were accuracy overstates a system by exactly the selector's fallibility, which is often large.</p>
+</div>
+
+<p>With a selector of reliability \( v \) &mdash; the probability it identifies a correct answer when one is present &mdash; the delivered accuracy is roughly \( v\bigl[1-(1-p)^k\bigr] \). The selector, not the sampler, is usually the binding constraint.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 14.1</span>
+<p class="title">Small model, many tries, against big model, one try</p>
+<p>Compare at equal compute. A small model costs 1 unit per attempt and succeeds with \( p = 0.2 \). A large model costs 10 units and succeeds with \( p = 0.6 \). Budget: 10 units.</p>
+<p>The small model gets 10 attempts: coverage \( = 1 - 0.8^{10} = 1 - 0.107 = \) <span class="keynum">0.893</span>. The large model gets one: \( 0.6 \). With a <em>perfect</em> selector, sampling wins decisively.</p>
+<p>Now introduce a realistic selector at \( v = 0.7 \): delivered accuracy becomes \( 0.7 \times 0.893 = \) <span class="keynum">0.625</span> &mdash; barely better than the large model's single attempt. The entire advantage lived in the assumption of perfect selection.</p>
+<p>This is why domains with <em>automatic</em> verification &mdash; code that must pass tests, mathematics with checkable answers, where \( v \approx 1 \) &mdash; led the inference-scaling era. Where verification is hard, the strategy degrades sharply.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 14.1</span>
+<p>(a) At \( p = 0.05 \), how many samples give 50% coverage? (b) Budget 32 units: model A costs 1 with \( p = 0.1 \); model B costs 8 with \( p = 0.45 \) (so four attempts). With a perfect selector, which wins?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 0.95^k = 0.5 \Rightarrow k = \ln 0.5/\ln 0.95 = 13.5 \), so 14. (b) A: \( 1 - 0.9^{32} = 0.966 \). B: \( 1 - 0.55^4 = 0.908 \). A wins narrowly.</p>
+</details>
+</div>
+
+<h2>14.2 Voting, and its threshold</h2>
+<p>A cheaper form of selection is to let the samples vote: return the most common answer. Chapter 1 computed the case of five attempts at \( p = 0.6 \), giving \( 0.683 \). The governing fact is a threshold.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 14.1</span>
+<p class="title">Voting helps only above one half</p>
+<p>For \( 2m+1 \) independent attempts each correct with probability \( p \) (assuming errors do not coordinate on a single wrong answer), the majority is correct with probability \( \sum_{j=m+1}^{2m+1}\binom{2m+1}{j}p^j(1-p)^{2m+1-j} \). By the law of large numbers this tends to 1 when \( p > \tfrac12 \) and to 0 when \( p < \tfrac12 \), as the number of attempts grows.</p>
+<p>The failure case is worth computing once. At \( p = 0.4 \) with five attempts, symmetry gives majority accuracy \( 1 - 0.683 = \) <span class="keynum">0.317</span> &mdash; <em>worse</em> than a single attempt's \( 0.4 \). Below the threshold, voting reliably amplifies the error rather than correcting it.</p>
+</div>
+
+<h2>14.3 Eliciting versus creating</h2>
+<p>The most important distinction in this chapter is not arithmetic but conceptual, and it is the one worth carrying away. Sampling many times and selecting redistributes probability mass the model <em>already had</em>. It surfaces a capability; it does not add one. If the model's per-attempt probability of solving a class of problem is zero, no amount of sampling produces a solution, and no verifier can select one from a set that contains none.</p>
+<p>Training a model to reason at length &mdash; using verifiable rewards and the group-relative method of Chapter 13 &mdash; is different in kind. It changes the weights, and therefore changes \( p \) itself. That mechanism can create a capability. Prompting a model to think step by step, at fixed weights, elicits; training it on verified reasoning traces creates.</p>
+
+<div class="drill">
+<span class="label">Drill 14.2</span>
+<p>Classify each as eliciting or creating: (a) best-of-64 sampling with unit tests; (b) majority voting; (c) reinforcement training on verified mathematics; (d) a longer step-by-step prompt at fixed weights.</p>
+<details><summary>Show answers</summary>
+<p>(a) elicit &mdash; selects from what the model already produces. (b) elicit. (c) <strong>create</strong> &mdash; the weights change, so \( p \) itself changes. (d) elicit &mdash; no weight change; it changes which of the model's existing behaviors is expressed.</p>
+</details>
+</div>
+
+<h2>14.4 What the chapter bought</h2>
+<p>Coverage grows as \( 1-(1-p)^k \) and is not accuracy; the selector's reliability multiplies it, and in domains without automatic verification that multiplier dominates. Voting is a cheap selector with a hard threshold at one half, below which it actively hurts. And the elicit&ndash;create distinction separates the mechanisms that surface existing ability from the one that manufactures it. Chapter 15 leaves language entirely for the era's other generative pillar, where an image is produced by reversing a controlled corruption.</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>At \( p = 0.3 \), give the coverage of 8 samples.</li>
+<li>How many samples reach 90% coverage at \( p = 0.15 \)?</li>
+<li>Five attempts at \( p = 0.55 \): give the majority-correct probability.</li>
+<li>Coverage 0.95 with a selector of reliability 0.6: give the delivered accuracy.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>Matched compute, honestly.</strong> A small model costs 1 unit at \( p = 0.15 \); a large model costs 12 units at \( p = 0.55 \). At a budget of 24 units, compare delivered accuracy under selectors of reliability \( v = 1.0 \), \( 0.8 \), and \( 0.6 \) (applying \( v \) to the sampling strategy only, since the single large-model answer needs no selection). At what \( v \) do they tie?</li>
+<li><strong>The voting threshold.</strong> For three independent attempts, derive the majority-correct probability \( 3p^2(1-p) + p^3 \) and show it exceeds \( p \) exactly when \( p > \tfrac12 \). Then evaluate at \( p = 0.45 \) and \( p = 0.55 \) and comment.</li>
+<li><strong>When to stop sampling.</strong> Each additional sample adds expected coverage \( (1-p)^k \cdot p \) at a cost of one unit. Given a value \( V \) per solved problem and a cost \( c \) per sample, derive the stopping condition and evaluate it for \( p = 0.1 \), \( V = 100 \), \( c = 1 \).</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>Why temperature zero breaks everything here.</strong> All of this chapter's arithmetic assumes independent samples. Explain what happens to coverage when sampling temperature approaches zero, why the independence assumption fails, and what that implies about the relationship between diversity and inference-time scaling. Then connect this to Chapter 5's result that temperature never reorders candidates: what exactly does temperature control, and why is that the quantity that matters here?</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 14 &middot; Pass before Chapter 15</span>
+<p>Reproduce the coverage formula, the matched-compute comparison template, and Derivation 14.1's threshold on blank paper. Attempt B-1 closed book, and defend each classification in Drill 14.2 with one sentence. You pass when you never again quote a coverage figure without naming the selector.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 14</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/2407.21787">Brown et al., <em>Large Language Monkeys: Scaling Inference Compute with Repeated Sampling</em> (2024)</a><span class="how">The coverage curves of Section 14.1, measured across many domains; note where verification is automatic.</span></li>
+<li><a href="https://arxiv.org/abs/2408.03314">Snell et al., <em>Scaling LLM Test-Time Compute Optimally</em> (2024)</a><span class="how">The matched-compute comparison of Worked Example 14.1, done carefully and at scale.</span></li>
+<li><a href="https://arxiv.org/abs/2201.11903">Wei et al., <em>Chain-of-Thought Prompting</em> (2022)</a><span class="how">Where sequential inference-time scaling began; classify it yourself as elicit or create before reading.</span></li>
+<li><a href="https://arxiv.org/abs/2203.11171">Wang et al., <em>Self-Consistency Improves Chain of Thought Reasoning</em> (2022)</a><span class="how">Voting as a selector; check their gains against Derivation 14.1's threshold.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 14 &middot; Thinking at Inference Time</span>
+  <span><a href="chapter-15.html">Next: Generation by Denoising &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

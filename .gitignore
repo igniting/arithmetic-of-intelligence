@@ -1,0 +1,19 @@
+# intermediate build artefacts
+.cache/
+
+# dependencies (package-lock.json IS committed, for reproducible builds)
+node_modules/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editors / os
+.DS_Store
+.vscode/
+.idea/
+
+# PDF
+dist/

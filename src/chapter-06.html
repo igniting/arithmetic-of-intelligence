@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 6 · The Economics of Scale — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-05.html">&larr; Chapter 5</a><a href="chapter-07.html">Chapter 7 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part II &middot; The Classical Era &middot; Chapter 6</span>
+  <h1 class="ch">The Economics of Scale</h1>
+  <p class="ch-blurb">Once architecture stops being the bottleneck, progress becomes a budgeting problem: given a fixed amount of compute, how should you split it between a bigger model and more data? The answer is a single constrained minimization &mdash; the most consequential in the field.</p>
+</header>
+
+<p class="lead">You have a fixed budget of computation, and two ways to spend it: a bigger model, or more data for a smaller one. Spend it wrong and you will train a model that is worse than the one the same money could have bought. For years this was decided by intuition and precedent. It is a calculus problem, and the calculus is the most valuable thing in this book.</p>
+<p>What makes it tractable is that loss falls as a smooth power law in both model size and data, and that compute is very nearly the product of the two. Those two facts are enough. We will set the problem up, solve it by substitution, read off how each quantity should scale with the budget, and finish by re-budgeting a famously over-large model into a much smaller and better-trained one at identical cost.</p>
+
+<h2>6.1 The loss surface of scale</h2>
+<p>Empirically, the loss of a trained language model is captured remarkably well by a sum of three terms:</p>
+\[ L(N, D) = A N^{-a} + B D^{-b} + E. \]
+<p>Here \( N \) is the number of parameters and \( D \) the number of training tokens. The first term falls as the model grows; the second falls as the data grows; the third, \( E \), is an irreducible floor &mdash; the entropy of language itself, which no amount of scale removes. The exponents \( a \) and \( b \) are small positive numbers, measured from experiments and, in the spirit of this book, <em>given</em> to you when needed. The shape of this surface is all we require.</p>
+<p>Two facts about power laws set the stage. First, because the exponents are small, improvements are expensive: halving a term takes far more than a doubling of its variable. Second, the two reducible terms trade off against each other under a compute budget, and finding the best trade is the whole game.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 6.1</span>
+<p class="title">What a halving really costs</p>
+<p>Take the parameter term with exponent \( a = 0.076 \). To halve it we need \( N^{-0.076} \) to fall by a factor of two, i.e. to multiply \( N \) by \( k \) where \( k^{-0.076} = \tfrac12 \). Then \( 0.076 \log_2 k = 1 \), so \( \log_2 k = 13.16 \) and \( k = 2^{13.16} \approx 9{,}100 \). Halving this loss term demands a nine-thousand-fold increase in parameters. The power law is smooth and utterly dependable &mdash; and staggeringly expensive. &ldquo;Reliable&rdquo; is not the same as &ldquo;cheap.&rdquo;</p>
+</div>
+
+<h2>6.2 The compute-optimal allocation</h2>
+<p>Training compute is, to a good approximation, proportional to the product of parameters and tokens: \( C = kND \) for a constant \( k \) (about 6, counting the forward and backward passes). Given a fixed budget \( C \), we want the split of that budget between \( N \) and \( D \) that minimizes the loss. This is a constrained minimization, and we solve it exactly as Chapter 1 prescribed: use the constraint to eliminate one variable, then differentiate.</p>
+
+<p>One warning before we start, because nearly everyone makes the same mistake here on first contact. When two terms trade off under a constraint, it is tempting to assume the optimum is where the two terms are <em>equal</em>. That is a good instinct and it is very nearly right &mdash; but not quite, and the correction matters. Watch for where the exponents appear, and note that they appear because we differentiated, not because anyone put them there by hand.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 6.1 &middot; the crown jewel</span>
+<p class="title">The exponent-weighted balance</p>
+<p>Minimize \( L(N,D) = AN^{-a} + BD^{-b} + E \) subject to \( C = kND \). Substitute \( D = C/(kN) \), so the data term becomes \( B\,(kN/C)^{b} \), and the irreducible \( E \) drops out of the differentiation:</p>
+\[ L(N) = A N^{-a} + B\left(\tfrac{k}{C}\right)^{b} N^{b}. \]
+<p>Differentiate and set to zero:</p>
+\[ \frac{dL}{dN} = -aA N^{-a-1} + bB\left(\tfrac{k}{C}\right)^{b} N^{b-1} = 0. \]
+<p>The second term is \( bB D^{-b}/N \) once we substitute \( D \) back. Multiplying through by \( N \) gives the optimum condition:</p>
+\[ \boxed{\,aA N^{-a} = bB D^{-b}\,}. \]
+<p>At the optimal allocation, the two reducible loss terms are equal <em>after weighting each by its own exponent</em>. Solving the balance together with \( ND \propto C \) yields the scaling of each with the budget:</p>
+\[ N \propto C^{\,b/(a+b)}, \qquad D \propto C^{\,a/(a+b)}. \]
+<p>And the ratio of tokens to parameters scales as \( D/N \propto C^{(a-b)/(a+b)} \).</p>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T2 &middot; the most expensive error in the book</span>
+<p>It is tempting to write the balance as \( AN^{-a} = BD^{-b} \) &mdash; the bare terms equal, without the exponent weights. This is wrong, and it produces the wrong optimal ratio whenever \( a \neq b \). The reason the exponents appear is that the constraint trades \( N \) for \( D \) at a rate that depends on how fast each term responds &mdash; and that rate is exactly the exponent. Substitution makes the weights fall out automatically, which is precisely why we solve it that way rather than by guessing that the terms should balance.</p>
+</div>
+
+<p>The special case \( a = b \) is worth naming, because it is the regime people carry in their heads. When the exponents are equal, \( N \propto C^{1/2} \) and \( D \propto C^{1/2} \): parameters and tokens grow together as the square root of compute, and the ratio \( D/N \) is a constant, independent of budget. &ldquo;Use a fixed number of tokens per parameter&rdquo; &mdash; the rule of thumb that a model should see roughly twenty tokens for each parameter &mdash; is this equal-exponent case.</p>
+
+<div class="drill">
+<span class="label">Drill 6.1</span>
+<p>Show that when \( a = b \), the token-to-parameter ratio \( D/N \) is independent of the compute budget \( C \), and that both \( N \) and \( D \) scale as \( C^{1/2} \).</p>
+<details><summary>Show answer</summary>
+<p>With \( a = b \), the exponents in \( N \propto C^{b/(a+b)} \) and \( D \propto C^{a/(a+b)} \) both equal \( \tfrac12 \). Then \( D/N \propto C^{1/2}/C^{1/2} = C^0 \), a constant.</p>
+</details>
+</div>
+
+<h2>6.3 Re-budgeting a real model</h2>
+<p>The derivation's practical bite is that it exposes over-large, under-trained models. A model that is too big for the data it saw is spending compute inefficiently: the same compute, re-allocated toward the optimal ratio, would train a smaller model on more data to a lower loss.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 6.2</span>
+<p class="title">From 175 billion to 51 billion</p>
+<p>Consider a well-known model of \( N = 175 \) billion parameters trained on \( D = 300 \) billion tokens &mdash; a ratio of under two tokens per parameter, far below the optimal twenty. Its compute is \( C = 6ND = 6 \times (1.75\times 10^{11})(3\times 10^{11}) = 3.15\times 10^{23} \) operations.</p>
+<p>Hold that compute fixed and re-allocate to the ratio \( D = 20N \). Then \( C = 6N(20N) = 120 N^2 \), so \( N^2 = 3.15\times 10^{23}/120 = 2.625\times 10^{21} \), giving \( N = 5.12\times 10^{10} \) &mdash; about <span class="keynum">51 billion parameters</span>, trained on roughly \( 1.02 \) trillion tokens. The same compute buys a model a third the size, trained on more than three times the data, at a lower loss. This single calculation redirected how the field spends its largest training budgets.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 6.2</span>
+<p>Under the coupling \( D \propto N^{0.74} \), if parameters are increased by a factor of 1000, by what factor should the dataset grow?</p>
+<details><summary>Show answer</summary>
+<p>\( 1000^{0.74} = 10^{3 \times 0.74} = 10^{2.22} \approx 166 \). A thousandfold in parameters calls for about a 166-fold increase in data.</p>
+</details>
+</div>
+
+<h2>6.4 What the chapter bought</h2>
+<p>The compute-optimal allocation is a constrained minimization whose answer &mdash; the exponent-weighted balance and the resulting \( C^{b/(a+b)} \) scaling &mdash; turned a matter of intuition into a matter of arithmetic. Its equal-exponent special case is the familiar &ldquo;fixed tokens per parameter&rdquo; rule; its general form exposes when a model is misallocated; and applying it to a real over-large model shrinks it by a factor of three at equal compute. This is the derivation to own most thoroughly in the entire book, and the three-days protocol below is not optional. Chapter 7 turns from the economics of scale to its machinery: once a model is too large for one accelerator, how is the work split across many, and what does that splitting cost?</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>A loss term falls as \( N^{-0.095} \). What parameter multiple halves it?</li>
+<li>A budget is \( C = 1.2\times 10^{24} \) operations. Using \( C = 120N^2 \) (the ratio-20 recipe), give \( N \) and \( D \).</li>
+<li>For exponents \( a = 0.34, b = 0.28 \), give the exponents with which \( N \) and \( D \) scale in \( C \).</li>
+<li>State the compute-optimal balance condition, with the exponent weights in place.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>The full allocation.</strong> Starting from \( L(N,D) = AN^{-a} + BD^{-b} + E \) and \( C = kND \), derive by substitution the optimum condition \( aAN^{-a} = bBD^{-b} \) and the scalings \( N \propto C^{b/(a+b)} \), \( D \propto C^{a/(a+b)} \). State in one sentence why the bare-term balance is wrong.</li>
+<li><strong>Re-budgeting.</strong> A model has \( N = 70 \) billion parameters and \( D = 1.4 \) trillion tokens. Holding its compute \( 6ND \) fixed, find the parameter count at the ratio \( D/N = 20 \), and the corresponding token count. Is the original over- or under-trained?</li>
+<li><strong>The cost of a halving.</strong> For \( a = 0.076 \), show that halving the parameter loss term costs a factor \( 2^{1/a} \) in \( N \), and evaluate it. Then, separately, comment on what this implies about the compute cost of steady loss reduction, given that compute scales with \( N \).</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>When the ratio drifts.</strong> Using \( D/N \propto C^{(a-b)/(a+b)} \), determine the sign of the drift in the optimal tokens-per-parameter ratio as the budget grows, for the case \( a < b \) and the case \( a > b \). Explain, in terms of which loss term responds faster to its variable, why the budget should be steered toward the slower-improving resource. (This anticipates why real recipes have drifted toward more tokens per parameter over time &mdash; a theme Chapter 16 completes.)</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 6 &middot; Pass before Chapter 7 &mdash; three-days protocol</span>
+<p>Reproduce Derivation 6.1 &mdash; substitution, differentiation, the exponent-weighted balance, and the \( C^{b/(a+b)} \) scalings &mdash; on blank paper, from nothing, on three separate days. Between attempts, do not reread it; let it settle and reconstruct it cold. This is the second of the book's three protocol derivations, and it is the one you will lean on most: Chapter 13's DPO collapse uses the same substitute-and-cancel discipline, and the fluency transfers directly. You pass when all three reconstructions are complete and correct, and B-2's re-budgeting comes without notes.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 6</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/2203.15556">Hoffmann et al., <em>Training Compute-Optimal Large Language Models</em> (Chinchilla, 2022)</a><span class="how">The paper this chapter is built on. Its three separate approaches to the frontier are three routes to your one first-order condition; read Section 3 against Derivation 6.1.</span></li>
+<li><a href="https://arxiv.org/abs/2001.08361">Kaplan et al., <em>Scaling Laws for Neural Language Models</em> (2020)</a><span class="how">Where the power-law form \( L(N,D) \) was first fit; read Figures 1&ndash;4 to see the surface you just minimized on.</span></li>
+<li><a href="https://www.jasonwei.net/blog/common-arguments-regarding-emergent-abilities">Background on scaling behavior</a><span class="how">Useful framing for why smooth power laws coexist with apparent jumps &mdash; a tension Chapter 8 resolves.</span></li>
+<li><a href="https://gwern.net/scaling-hypothesis">Branwen, <em>The Scaling Hypothesis</em></a><span class="how">The ideology around the arithmetic; read after the derivation to see what people built on top of it.</span></li>
+<li><a href="http://www.incompleteideas.net/IncIdeas/BitterLesson.html">Sutton, <em>The Bitter Lesson</em> (2019)</a><span class="how">One page. The philosophical companion to the compute-optimal result.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 6 &middot; The Economics of Scale</span>
+  <span><a href="chapter-07.html">Next: The Machinery of Scale &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

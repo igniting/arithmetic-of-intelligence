@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 11 · Bytes over FLOPs — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-10.html">&larr; Chapter 10</a><a href="chapter-12.html">Chapter 12 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 11</span>
+  <h1 class="ch">Bytes over FLOPs</h1>
+  <p class="ch-blurb">Two of the era's most elegant results trade arithmetic for memory traffic, and speed for nothing at all. Both are exact: neither changes a single output.</p>
+</header>
+
+<p class="lead">Consider two claims that sound like they cannot both be true. The fastest known way to compute attention does <em>more</em> arithmetic than the obvious way. And there is a method that makes a large model generate text two or three times faster while provably producing exactly the same distribution of outputs it would have produced anyway. Both are true, and both follow from the previous chapter's finding about what is actually scarce.</p>
+
+<h2>11.1 Attention without the score matrix</h2>
+<p>Chapter 5 counted attention's arithmetic as \( 2n^2 d \). At realistic sequence lengths, however, the binding cost is not those operations but the \( n \times n \) matrix of scores travelling to and from main memory. The output of attention is only \( n \times d \) values; the intermediate is \( n^2 \). That gap &mdash; \( \Theta(n^2) \) traffic for a \( \Theta(nd) \) result &mdash; is what an IO-aware kernel closes.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 11.1</span>
+<p class="title">The intermediate does not fit</p>
+<p>At \( n = 4096 \) in half precision, one head's score matrix occupies \( 2n^2 = 2 \times 4096^2 = 33.6 \) MB &mdash; larger than the reference accelerator's entire 20 MB of fast on-chip memory, and that is per head, per layer. You cannot keep it on chip; you either round-trip it through main memory at great cost, or you never form it at all.</p>
+</div>
+
+<p>Never forming it requires computing a softmax over values you see only a block at a time. That is possible, and exactly, because the softmax normalizer can be maintained incrementally.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 11.1</span>
+<p class="title">Streaming softmax</p>
+<p>To normalize safely we subtract the running maximum before exponentiating, so nothing overflows. Maintain a running maximum \( m \) and a running sum \( \ell = \sum e^{s_i - m} \) over the scores seen so far. On receiving a new block of scores \( \{s_i\} \):</p>
+\[ m' = \max\bigl(m,\ \max_i s_i\bigr), \qquad \ell' = \ell\,e^{\,m - m'} + \sum_i e^{\,s_i - m'}. \]
+<p>The factor \( e^{m-m'} \) rescales the old partial sum into the new frame &mdash; it is never larger than 1, so the update is numerically safe. The same rescaling is applied to a running weighted sum of value vectors, so the attention output can be accumulated block by block without the score matrix ever existing in full.</p>
+<p><em>Verify that this is exact.</em> Let scores arrive as \( \{2, 1\} \) then \( \{3, 0\} \). After the first block, \( m = 2 \) and \( \ell = e^0 + e^{-1} = 1.368 \). After the second, \( m' = 3 \) and \( \ell' = 1.368\,e^{-1} + (e^0 + e^{-3}) = 0.503 + 1.050 = 1.553 \). Computing in one shot instead: \( e^{-1} + e^{-2} + e^{0} + e^{-3} = 0.368 + 0.135 + 1 + 0.050 = \) <span class="keynum">1.553</span>. Identical. The streaming form is not an approximation.</p>
+</div>
+
+<p>With this, attention is computed in tiles small enough to sit in fast memory: load a block of queries, stream blocks of keys and values past it, accumulate. Main-memory traffic falls by roughly an order of magnitude. The backward pass <em>recomputes</em> the blocks it needs rather than storing them &mdash; more arithmetic, less memory &mdash; and the kernel wins anyway. That is the roofline lesson in its purest form.</p>
+
+<div class="box trap">
+<span class="label">Trap &middot; T8 &middot; objective versus estimator</span>
+<p>This technique is <em>exact</em>. It computes the same attention function, to floating-point tolerance, as the naive implementation. Approximate attention &mdash; sparse patterns, low-rank surrogates &mdash; is a different trade entirely, buying speed with fidelity. Confusing the two is the most common misreading here: an IO-aware kernel changes <em>how</em> a quantity is computed, not <em>what</em> is computed.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 11.1</span>
+<p>Scores arrive as \( \{1, 4\} \) then \( \{2, 2, 5\} \). Run the streaming update and verify against the one-shot sum.</p>
+<details><summary>Show answer</summary>
+<p>Block 1: \( m = 4 \), \( \ell = e^{-3} + e^{0} = 1.050 \). Block 2: \( m' = 5 \), \( \ell' = 1.050\,e^{-1} + (e^{-3} + e^{-3} + e^{0}) = 0.386 + 1.100 = 1.486 \). One shot: \( e^{-4} + e^{-1} + e^{-3} + e^{-3} + e^{0} = 0.018 + 0.368 + 0.050 + 0.050 + 1 = 1.486 \). ✓</p>
+</details>
+</div>
+
+<h2>11.2 Speculative decoding</h2>
+<p>The second technique attacks the same waste from a different side. Decoding is memory-bound (Chapter 10), so the accelerator's arithmetic sits idle while weights stream past. Suppose a small, cheap <em>draft</em> model proposes the next \( k \) tokens; the large <em>target</em> model can then check all \( k \) in a <em>single</em> forward pass, because verifying several positions at once is a prefill-shaped, compute-bound operation &mdash; nearly free relative to \( k \) separate decode steps.</p>
+<p>The obvious objection is that the output would then be the draft's, not the target's. The answer is a rejection-sampling scheme that makes the final distribution <em>exactly</em> the target's.</p>
+
+<p>The obvious objection comes first, and you should feel its force before seeing it dissolved. If a small, weaker model is proposing the words, surely the output is contaminated by that weaker model &mdash; faster, perhaps, but subtly worse. It is an entirely reasonable worry. It is also, as the following shows, exactly wrong: the acceptance rule is constructed so that the weaker model's preferences cancel out of the final distribution completely.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 11.2</span>
+<p class="title">Exactness by rejection sampling</p>
+<p>Let the target assign probability \( p(x) \) to token \( x \) and the draft assign \( q(x) \). Sample \( x \sim q \) and accept it with probability \( \min\bigl(1, p(x)/q(x)\bigr) \). If rejected, sample instead from the normalized residual \( \operatorname{norm}\bigl(\max(0,\ p - q)\bigr) \).</p>
+<p>Then the probability of emitting \( x \) is the accepted mass plus the resampled mass. The accepted mass is \( q(x)\min(1, p/q) = \min(q(x), p(x)) \). Summed over all tokens, the total accepted probability is \( \sum_x \min(p,q) \), so rejection occurs with probability \( 1 - \sum_x \min(p,q) = \sum_x \max(0, p-q) \). The residual distribution places mass \( \max(0, p(x)-q(x)) / \sum_x \max(0,p-q) \) on \( x \). Multiplying and adding:</p>
+\[ \min(p,q) + \max(0, p-q) = p(x). \]
+<p>The emitted distribution is exactly the target's. Speculation changes speed, never samples.</p>
+</div>
+
+<p>How much speed? If each drafted token is accepted independently with rate \( \alpha \), a verification cycle keeps the accepted run plus one token the target supplies regardless.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 11.3</span>
+<p class="title">Expected tokens per cycle</p>
+<p>The run of accepted tokens has length \( i \) with probability \( \alpha^i(1-\alpha) \) for \( i < k \), and length \( k \) with probability \( \alpha^k \); each case yields \( i+1 \) tokens. Summing the truncated geometric series,</p>
+\[ \mathbb{E}[\text{tokens per cycle}] = \frac{1 - \alpha^{\,k+1}}{1 - \alpha}. \]
+<p>If the draft costs \( c \) target-forwards per token, a cycle costs \( kc + 1 \) target-forwards. The speedup is the ratio.</p>
+</div>
+
+<div class="box worked">
+<span class="label">Worked Example 11.2</span>
+<p class="title">The economics, end to end</p>
+<p>Take \( \alpha = 0.8 \), \( k = 4 \), \( c = 0.1 \). Tokens per cycle: \( (1 - 0.8^5)/0.2 = (1-0.328)/0.2 = 3.36 \). Cycle cost: \( 4(0.1) + 1 = 1.4 \) target-forwards. Speedup: \( 3.36/1.4 = \) <span class="keynum">2.4&times;</span> &mdash; with provably identical output.</p>
+<p>Sensitivity matters more than the headline. At \( \alpha = 0.5 \) the same configuration gives \( (1 - 0.5^5)/0.5 = 1.94 \) tokens per 1.4 forwards, a mere \( 1.38\times \). The draft's <em>agreement</em> with the target is everything; its standalone quality matters only through \( \alpha \).</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 11.2</span>
+<p>(a) The draft assigns \( q(A) = 0.5 \), the target \( p(A) = 0.3 \). What is the acceptance probability for A? (b) With \( \alpha = 0.7, k = 3, c = 0.15 \), what is the speedup?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( \min(1, 0.3/0.5) = 0.6 \). (b) Tokens \( = (1 - 0.7^4)/0.3 = (1-0.2401)/0.3 = 2.53 \); cost \( = 3(0.15)+1 = 1.45 \); speedup \( = 1.75\times \).</p>
+</details>
+</div>
+
+<p>Choosing \( k \) is a marginal calculation: extending the draft by one more token adds an expected \( \alpha^{k+1} \) tokens and costs \( c \) more. When those balance, you are at the optimum &mdash; and because the curve is flat near it, a range of \( k \) performs about equally.</p>
+
+<h2>11.3 What the chapter bought</h2>
+<p>Both techniques in this chapter trade an abundant resource for a scarce one, and both are exact &mdash; a combination worth pausing on, since it is rarer than it sounds. Streaming softmax lets attention be computed in tiles, cutting memory traffic by an order of magnitude while doing slightly more arithmetic and recomputation. Speculative decoding converts \( k \) memory-bound passes into one compute-bound verification, with a rejection rule that provably preserves the target distribution. Both illustrate the discipline this book keeps returning to: identify the binding budget, then spend freely from the other. Chapter 12 continues in the same vein but changes the object &mdash; instead of computing the same model more cleverly, it makes the model itself sparser and cheaper.</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>At \( n = 8192 \), half precision: give one head's score-matrix size and its ratio to 20 MB of on-chip memory.</li>
+<li>Run the streaming softmax on blocks \( \{0, 2\} \) then \( \{1\} \), and verify against the one-shot sum.</li>
+<li>With \( \alpha = 0.9, k = 5 \), give the expected tokens per cycle.</li>
+<li>State, in one sentence each, what streaming softmax and speculative decoding change and what they leave exactly unchanged.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>Traffic accounting.</strong> For standard attention at \( n = 4096 \), \( d = 128 \), half precision, compare the score-matrix traffic (written once and read once) against the unavoidable traffic for queries, keys, values, and output. Give the ratio and comment on how it scales with \( n \) and \( d \).</li>
+<li><strong>Proving exactness.</strong> Carry out Derivation 11.2 for a two-symbol alphabet with explicit numbers: \( p = (0.3, 0.7) \), \( q = (0.5, 0.5) \). Compute the acceptance probabilities, the rejection probability, the residual distribution, and verify that the emitted distribution equals \( p \) exactly.</li>
+<li><strong>Choosing the draft length.</strong> With \( \alpha = 0.8 \) and \( c = 0.1 \), compute the speedup at \( k = 2, 4, 8, 16 \). Identify where the optimum lies, and show that the marginal condition \( \alpha^{k+1} \approx c \) predicts it.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>Why decode and not prefill.</strong> Explain, using Chapter 10's arithmetic-intensity argument, why speculative decoding accelerates generation but offers essentially nothing for prompt processing. Then propose what property a workload must have for speculation to help it, stated in terms of intensity and the ridge point, and give one non-language example that would qualify.</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 11 &middot; Pass before Chapter 12</span>
+<p>Reproduce Derivation 11.1 (streaming softmax, including the value accumulator's rescaling), Derivation 11.2 (the exactness proof), and Derivation 11.3 (expected tokens per cycle) on blank paper. Verify a streaming example numerically by hand. Attempt B-2 and B-3 closed book. You pass when you can state, without hedging, that both techniques are exact and explain why.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 11</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/1805.02867">Milakov &amp; Gimelshein, <em>Online Normalizer Calculation for Softmax</em> (2018)</a><span class="how">Three pages, read fully. Derivation 11.1 in its original form.</span></li>
+<li><a href="https://arxiv.org/abs/2205.14135">Dao et al., <em>FlashAttention</em> (2022)</a><span class="how">Sections 1&ndash;3 and Figure 1. The IO analysis is Worked Example 11.1 made rigorous.</span></li>
+<li><a href="https://arxiv.org/abs/2307.08691">Dao, <em>FlashAttention-2</em> (2023)</a><span class="how">Skim for what changed &mdash; work partitioning, not mathematics. A good lesson in where real speedups come from.</span></li>
+<li><a href="https://arxiv.org/abs/2211.17192">Leviathan, Kalman &amp; Matias, <em>Fast Inference from Transformers via Speculative Decoding</em> (2023)</a><span class="how">Section 2 contains the one-page proof of Derivation 11.2; compare it to yours.</span></li>
+<li><a href="https://arxiv.org/abs/2302.01318">Chen et al., <em>Accelerating Large Language Model Decoding with Speculative Sampling</em> (2023)</a><span class="how">The parallel discovery; useful for seeing the same result presented differently.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 11 &middot; Bytes over FLOPs</span>
+  <span><a href="chapter-12.html">Next: Sparsity and Thrift &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,148 @@
+/* Derivations First — shared stylesheet
+   Aesthetic: engineering graph-paper. Deliberately avoids the cream+terracotta
+   AI-design tell. Blueprint blue, ink, rust reserved for warnings/traps. */
+
+:root{
+  --paper:#F5F7F6; --ink:#1C2733; --ink-soft:#46535F; --rule:#C9D2D6;
+  --blue:#2B5DA8; --blue-dk:#1E4176; --rust:#A64B2A; --rust-dk:#7E3418;
+  --grid:rgba(43,93,168,.07); --box:#FFFFFF; --box-alt:#EEF2F1;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);
+  font-family:'Source Serif 4',Georgia,serif;font-size:17px;line-height:1.66;
+  -webkit-font-smoothing:antialiased}
+.page{max-width:760px;margin:0 auto;padding:0 28px 110px}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+em{font-style:italic}
+strong{font-weight:600}
+
+/* ---- running header / chapter nav ---- */
+.chrome{position:sticky;top:0;z-index:20;background:rgba(245,247,246,.92);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--rule)}
+.chrome-in{max-width:760px;margin:0 auto;padding:10px 28px;display:flex;
+  justify-content:space-between;align-items:center;gap:16px}
+.chrome a{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.04em}
+.chrome .home{font-weight:600;color:var(--ink)}
+.chrome .nav{display:flex;gap:18px}
+
+/* ---- cover (index only) ---- */
+.cover{padding:88px 0 56px;border-bottom:3px solid var(--ink);
+  background:linear-gradient(var(--grid) 1px,transparent 1px),
+   linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px}
+.imprint{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--blue-dk)}
+h1.title{font-family:'Zilla Slab',serif;font-weight:700;font-size:clamp(42px,7vw,68px);
+  line-height:1.02;margin:18px 0 12px}
+.subtitle{font-family:'Zilla Slab',serif;font-weight:500;font-size:clamp(18px,3vw,23px);
+  color:var(--ink-soft);max-width:36ch;line-height:1.3}
+.cover-meta{margin-top:34px;display:flex;gap:26px;flex-wrap:wrap;
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft)}
+.cover-meta b{color:var(--ink);font-weight:600}
+
+/* ---- chapter opener ---- */
+.opener{padding:52px 0 26px;margin-bottom:8px;border-bottom:2px solid var(--ink);
+  background:linear-gradient(var(--grid) 1px,transparent 1px),
+   linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--blue-dk)}
+h1.ch{font-family:'Zilla Slab',serif;font-weight:700;font-size:clamp(32px,5.5vw,50px);
+  line-height:1.04;margin:14px 0 14px}
+.ch-blurb{font-family:'Source Serif 4',serif;font-size:19px;color:var(--ink-soft);
+  max-width:60ch;font-style:italic}
+
+/* ---- headings ---- */
+h2{font-family:'Zilla Slab',serif;font-weight:600;font-size:27px;margin:58px 0 14px;
+  padding-top:16px;border-top:2px solid var(--ink)}
+h3{font-family:'Zilla Slab',serif;font-weight:600;font-size:20px;margin:32px 0 8px;color:var(--blue-dk)}
+h4{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);margin:24px 0 6px}
+
+/* ---- body ---- */
+p{margin:0 0 16px;max-width:68ch}
+p.lead{font-size:19px}
+ul,ol{margin:0 0 16px 26px}
+li{margin-bottom:8px;max-width:66ch}
+hr{border:none;border-top:1px solid var(--rule);margin:34px 0}
+
+/* ---- derivation / worked-example / trap boxes ---- */
+.box{background:var(--box);border:1px solid var(--rule);border-radius:2px;
+  padding:20px 22px;margin:24px 0;box-shadow:0 1px 0 rgba(28,39,51,.04)}
+.box .label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;display:block;margin-bottom:10px;font-weight:600}
+.deriv{border-left:4px solid var(--blue);
+  background:linear-gradient(var(--grid) 1px,transparent 1px),
+   linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:22px 22px;background-color:#fff}
+.deriv .label{color:var(--blue-dk)}
+.worked{border-left:4px solid var(--ink)}
+.worked .label{color:var(--ink)}
+.trap{border-left:4px solid var(--rust);background:#FBF3EF}
+.trap .label{color:var(--rust-dk)}
+.box p:last-child,.box ul:last-child,.box ol:last-child{margin-bottom:0}
+.box .title{font-family:'Zilla Slab',serif;font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px}
+
+/* ---- inline drill ---- */
+.drill{background:var(--box-alt);border-radius:2px;padding:16px 20px;margin:22px 0}
+.drill .label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--blue-dk);font-weight:600;display:block;margin-bottom:8px}
+details{margin-top:10px;border-top:1px dashed var(--rule);padding-top:8px}
+summary{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--blue);cursor:pointer;
+  letter-spacing:.04em}
+summary:hover{text-decoration:underline}
+details[open] summary{margin-bottom:8px}
+
+/* ---- exercises ---- */
+.exset{margin-top:14px}
+.exgrade{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--rust-dk);font-weight:600;margin:22px 0 4px}
+ol.ex{margin-left:24px}
+ol.ex li{margin-bottom:12px}
+
+/* ---- reading list ---- */
+.readings{background:var(--box);border:1px solid var(--rule);padding:18px 22px;margin:22px 0}
+.readings h4{margin-top:0}
+.readings ul{list-style:none;margin-left:0}
+.readings li{padding:7px 0;border-bottom:1px solid var(--rule);max-width:none}
+.readings li:last-child{border-bottom:none}
+.readings .how{display:block;font-size:14.5px;color:var(--ink-soft);margin-top:2px}
+
+/* ---- key-number callout ---- */
+.keynum{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--blue-dk)}
+
+/* ---- gate banner ---- */
+.gate{border:2px solid var(--ink);border-radius:2px;padding:18px 22px;margin:34px 0;
+  background:var(--box)}
+.gate .label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink);font-weight:600;display:block;margin-bottom:8px}
+
+/* ---- footer ---- */
+footer{margin-top:80px;padding-top:18px;border-top:1px solid var(--rule);
+  font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+/* ---- KaTeX sizing ---- */
+.katex{font-size:1.02em}
+.katex-display{margin:18px 0;overflow-x:auto;overflow-y:hidden;padding:2px 0}
+
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media (max-width:640px){
+  body{font-size:16px}
+  .page{padding:0 20px 80px}
+  .chrome-in{padding:10px 20px}
+  h1.ch{font-size:32px}
+}
+
+
+/* ---- cover figure (index) ---- */
+.cover{padding:44px 0 40px;background:none;border-bottom:3px solid var(--ink)}
+.cover-fig{width:100%;margin-bottom:8px}
+.coverfig{width:100%;height:auto;display:block}
+.cover-cap{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+  color:#8A97A0;text-align:right;margin-bottom:30px}
+.cover-rule{border:none;border-top:2px solid var(--ink);margin:0 0 24px}
+h1.title{font-size:clamp(38px,7vw,62px);margin:0 0 18px}
+.cover-author{margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);
+  font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink)}

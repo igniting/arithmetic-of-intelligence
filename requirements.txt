@@ -1,0 +1,7 @@
+# PDF toolchain
+weasyprint>=60      # HTML/CSS -> PDF with real print CSS support
+pypdf>=4.0          # metadata stamping
+
+# optional, for previewing rendered pages during development
+pdf2image>=1.17
+pillow>=10.0

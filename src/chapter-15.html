@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 15 · Generation by Denoising — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="chapter-14.html">&larr; Chapter 14</a><a href="chapter-16.html">Chapter 16 &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Part III &middot; The Modern Era &middot; Chapter 15</span>
+  <h1 class="ch">Generation by Denoising</h1>
+  <p class="ch-blurb">Destroy an image gradually with noise until nothing remains, then train a network to undo one step of the destruction. Run it backward and you have a generator &mdash; and the whole construction rests on the fact that Gaussians compose.</p>
+</header>
+
+<p class="lead">Take a photograph and add a little noise. Add a little more. Keep going until nothing is left but static. Now train a network to undo one step of that, and run it backwards from pure noise. What comes out is a photograph that never existed. It is a strange way to build a generator, and the reason it is tractable at all is a fact about Gaussians you met in Chapter 1.</p>
+
+<h2>15.1 The forward process collapses</h2>
+<p>The corruption is defined one step at a time: blend the current image with fresh Gaussian noise,</p>
+\[ x_t = \sqrt{1-\beta_t}\,x_{t-1} + \sqrt{\beta_t}\,\epsilon, \qquad \epsilon \sim \mathcal{N}(0, I), \]
+<p>with a small schedule \( \beta_t \). Applied a thousand times, this leaves pure noise. Simulating a thousand steps to produce a training example would be intolerable &mdash; but we do not have to, because a chain of Gaussian blends is itself a single Gaussian blend.</p>
+
+<p>There is a practical problem to notice before the mathematics. Training requires showing the network images corrupted to every possible degree. If reaching corruption level eight hundred meant actually running eight hundred steps of noising for every training example, the method would be far too slow to use. So the question that has to be answered first is whether we can jump straight to any level in one operation. The answer is yes, and the reason is a fact about Gaussians you already know.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 15.1</span>
+<p class="title">A thousand steps in one jump</p>
+<p>Take two steps with constants \( \beta_1, \beta_2 \), and write \( \alpha_t = 1-\beta_t \). Then \( x_1 = \sqrt{\alpha_1}x_0 + \sqrt{1-\alpha_1}\,\epsilon_1 \) and</p>
+\[ x_2 = \sqrt{\alpha_2}\,x_1 + \sqrt{1-\alpha_2}\,\epsilon_2 = \sqrt{\alpha_2\alpha_1}\,x_0 + \sqrt{\alpha_2(1-\alpha_1)}\,\epsilon_1 + \sqrt{1-\alpha_2}\,\epsilon_2. \]
+<p>The two noise terms are independent Gaussians, so &mdash; variances add &mdash; their sum is a single Gaussian of variance \( \alpha_2(1-\alpha_1) + (1-\alpha_2) = 1 - \alpha_1\alpha_2 \). Hence \( x_2 = \sqrt{\bar\alpha_2}\,x_0 + \sqrt{1-\bar\alpha_2}\,\epsilon \) with \( \bar\alpha_2 = \alpha_1\alpha_2 \). By induction,</p>
+\[ q(x_t \mid x_0) = \mathcal{N}\bigl(\sqrt{\bar\alpha_t}\,x_0,\ (1-\bar\alpha_t)I\bigr), \qquad \bar\alpha_t = \prod_{s \le t}(1-\beta_s). \]
+<p>Any noise level is reachable in one draw. Note the coefficients: \( \sqrt{\bar\alpha} \) multiplies the signal and \( \sqrt{1-\bar\alpha} \) the noise, so their variances sum to 1 &mdash; the check that catches nearly every algebra slip here.</p>
+</div>
+
+<p>The quantity that gives the schedule meaning is the signal-to-noise ratio, \( \mathrm{SNR}(t) = \bar\alpha_t/(1-\bar\alpha_t) \), which slides from very large to nearly zero. Training samples a random \( t \), corrupts a real image to that level, and asks the network to predict the noise that was added. The network thus learns to denoise at every level at once &mdash; a curriculum in a single objective.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 15.1</span>
+<p class="title">Reading a schedule</p>
+<p>Take a constant \( \beta = 0.02 \), so \( \bar\alpha_t = 0.98^t \). The half-signal point, where \( \mathrm{SNR} = 1 \), is where \( 0.98^t = 0.5 \): \( t = \ln 0.5/\ln 0.98 = 0.693/0.0202 = \) <span class="keynum">34</span>. By \( t = 100 \), \( \bar\alpha = 0.98^{100} = e^{-2.02} = 0.133 \) and the SNR is \( 0.133/0.867 = 0.15 \) &mdash; structure nearly gone.</p>
+<p>Observe that this is arithmetically the same computation as Chapter 8's emergence frontier \( p^k = \tfrac12 \). Different subject, identical reflex.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 15.1</span>
+<p>(a) With \( \beta = 0.01 \), at what step does \( \mathrm{SNR} = 1 \)? (b) If \( \bar\alpha = 0.36 \), write \( x_t \) explicitly in terms of \( x_0 \) and \( \epsilon \).</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 0.99^t = 0.5 \Rightarrow t = 0.693/0.01005 = 69 \). (b) \( x_t = 0.6\,x_0 + 0.8\,\epsilon \), since \( \sqrt{0.36} = 0.6 \) and \( \sqrt{0.64} = 0.8 \); note \( 0.36 + 0.64 = 1 \). ✓</p>
+</details>
+</div>
+
+<h2>15.2 Sampling, and how to shorten it</h2>
+<p>Generation reverses the ladder: start from noise and repeatedly subtract the network's predicted noise. Done naively this takes as many network evaluations as the forward process had steps &mdash; often a thousand, which is expensive. A reformulation of the reverse process makes it deterministic and permits <em>strides</em>: take every twentieth step instead of every step, and a thousand-step schedule becomes fifty network evaluations at modest quality cost. Since cost is proportional to the number of evaluations, this is a twentyfold saving &mdash; the single most consequential practical fact about deploying these models.</p>
+
+<h2>15.3 Guidance is extrapolation</h2>
+<p>To make generation follow a condition &mdash; a text prompt, say &mdash; the model is trained both with the condition and, some fraction of the time, without it. At sampling time the two predictions are combined:</p>
+\[ \tilde\epsilon = \epsilon_u + w\,(\epsilon_c - \epsilon_u), \]
+<p>where \( \epsilon_u \) is the unconditional prediction and \( \epsilon_c \) the conditional. At \( w = 0 \) this is unconditional; at \( w = 1 \) it is exactly the conditional prediction. At \( w > 1 \) &mdash; the usual setting &mdash; it goes <em>past</em> the conditional prediction, in the direction that distinguishes conditional from unconditional.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 15.2</span>
+<p class="title">Outside the interval</p>
+<p>Let \( \epsilon_u = 0.20 \), \( \epsilon_c = 0.30 \), \( w = 7.5 \). Then \( \tilde\epsilon = 0.20 + 7.5(0.10) = \) <span class="keynum">0.95</span> &mdash; far outside \( [0.20, 0.30] \). Guidance is extrapolation, not interpolation. That is both why it sharpens adherence to the prompt and why large \( w \) over-saturates and collapses diversity: you are pushing well beyond where either prediction was trained to be valid.</p>
+</div>
+
+<div class="box trap">
+<span class="label">Trap &middot; T5 and T1</span>
+<p>Three recurring slips. Reading \( w \) as a mixing weight in \( [0,1] \) &mdash; it is not; values of 5 to 10 are routine. Confusing \( \alpha_t = 1-\beta_t \) with the cumulative \( \bar\alpha_t \) &mdash; the bar denotes the product over all steps so far. And placing the square roots wrongly: it is \( \sqrt{\bar\alpha} \) on the signal and \( \sqrt{1-\bar\alpha} \) on the noise, verifiable at a glance because the variances must sum to one.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 15.2</span>
+<p>With \( w = 3 \), \( \epsilon_u = 0.5 \), \( \epsilon_c = 0.4 \), compute \( \tilde\epsilon \) and note its direction relative to the two inputs.</p>
+<details><summary>Show answer</summary>
+<p>\( 0.5 + 3(0.4 - 0.5) = 0.5 - 0.3 = 0.2 \) &mdash; below both, because the conditional lies below the unconditional and guidance extrapolates in that direction.</p>
+</details>
+</div>
+
+<h2>15.4 Denoising in a compressed space</h2>
+<p>Running this process at full image resolution is wasteful, because most pixel-level detail is texture that a decoder can supply. The remedy is to compress the image into a much smaller latent representation, run the entire diffusion process there, and decode at the end. The saving is roughly the compression ratio in both computation and activation memory &mdash; often a factor of dozens.</p>
+<p>Structurally this is the same division of labour we saw in Chapter 3's bottleneck block and Chapter 12's expert routing: do the expensive work in the narrow space, and let cheap machinery handle the wide one. It is worth recognizing the pattern, because it recurs whenever a field gets serious about cost.</p>
+
+<h2>15.5 What the chapter bought</h2>
+<p>The forward corruption collapses to a single Gaussian because variances add &mdash; making training tractable at any noise level in one draw. The signal-to-noise ratio gives the schedule its meaning, and its half-signal point is a logarithm. Sampling can be strided, turning a thousand evaluations into fifty. Guidance extrapolates beyond the conditional prediction, buying adherence at the cost of diversity. And running the whole process in a compressed latent space is the same narrow-middle economy that recurs throughout this book. One chapter remains: what all of this costs over a model's entire life, and how that changes what model you should have trained in the first place.</p>
+
+<h2>Exercises</h2>
+<div class="exset">
+<p class="exgrade">A &middot; Drills</p>
+<ol class="ex">
+<li>With \( \beta = 0.005 \), find the step at which \( \mathrm{SNR} = 1 \).</li>
+<li>At \( \bar\alpha = 0.81 \), write the coefficients on \( x_0 \) and \( \epsilon \), and verify they are consistent.</li>
+<li>Compute \( \tilde\epsilon \) for \( w = 5 \), \( \epsilon_u = 0.1 \), \( \epsilon_c = 0.25 \).</li>
+<li>A 1000-step schedule is strided by 25. How many network evaluations does sampling take?</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">B &middot; Problems</p>
+<ol class="ex">
+<li><strong>Composing two steps.</strong> Carry out Derivation 15.1 in full for two steps with distinct \( \beta_1 = 0.01 \) and \( \beta_2 = 0.03 \): give \( \bar\alpha_2 \), the coefficients on \( x_0 \) and on the combined noise, and verify the variances sum to one. Then state the induction step for general \( t \).</li>
+<li><strong>Designing a schedule.</strong> You want \( \mathrm{SNR} = 1 \) to occur at step 200 under a constant \( \beta \). Find \( \beta \). Then compute \( \bar\alpha \) at step 500 under that schedule.</li>
+<li><strong>The cost of guidance.</strong> Classifier-free guidance requires both a conditional and an unconditional prediction at every sampling step. State the multiplier this puts on sampling cost, and combine it with a stride of 20 on a 1000-step schedule to give the total number of network evaluations. Compare against unguided, unstrided sampling.</li>
+</ol>
+</div>
+<div class="exset">
+<p class="exgrade">C &middot; Challenge</p>
+<ol class="ex">
+<li><strong>The narrow middle, three times.</strong> The bottleneck block of Chapter 3, the expert routing of Chapter 12, and the latent space of Section 15.4 all perform expensive computation in a compressed representation. For each, identify what is compressed, what does the compressing and decompressing, which budget is saved, and what is risked by compressing too aggressively. Then state the general design principle in one sentence.</li>
+</ol>
+</div>
+
+<div class="gate">
+<span class="label">Gate 15 &middot; Pass before Chapter 16</span>
+<p>Reproduce Derivation 15.1 &mdash; the two-step composition and the induction &mdash; on blank paper, and produce the SNR half-point calculation from nothing. Attempt B-1 and B-2 closed book. You pass when the coefficient placement is automatic and you check it every time by summing variances to one.</p>
+</div>
+
+<div class="readings">
+<h4>Readings for Chapter 15</h4>
+<ul>
+<li><a href="https://arxiv.org/abs/2006.11239">Ho, Jain &amp; Abbeel, <em>Denoising Diffusion Probabilistic Models</em> (2020)</a><span class="how">Sections 2&ndash;3. Skip the variational bound on a first pass and take Derivation 15.1's closed form as your target.</span></li>
+<li><a href="https://arxiv.org/abs/2010.02502">Song, Meng &amp; Ermon, <em>Denoising Diffusion Implicit Models</em> (2020)</a><span class="how">The strided sampling of Section 15.2; read the quality-versus-steps table.</span></li>
+<li><a href="https://arxiv.org/abs/2207.12598">Ho &amp; Salimans, <em>Classifier-Free Diffusion Guidance</em> (2022)</a><span class="how">Four pages, read fully; Worked Example 15.2 is their equation with numbers attached.</span></li>
+<li><a href="https://arxiv.org/abs/2112.10752">Rombach et al., <em>High-Resolution Image Synthesis with Latent Diffusion Models</em> (2022)</a><span class="how">Section 3 for the compressed-space argument of Section 15.4.</span></li>
+<li><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/">Weng, <em>What Are Diffusion Models?</em></a><span class="how">The consolidating survey; read after the derivations to place them among the variants.</span></li>
+</ul>
+</div>
+
+<footer>
+  <span>Chapter 15 &middot; Generation by Denoising</span>
+  <span><a href="chapter-16.html">Next: The Whole Lifecycle &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

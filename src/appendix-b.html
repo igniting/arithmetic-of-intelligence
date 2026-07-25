@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appendix B · The Trap Taxonomy — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="appendix-a.html">&larr; Appendix A</a><a href="appendix-c.html">Appendix C &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Appendix B</span>
+  <h1 class="ch">The Trap Taxonomy</h1>
+  <p class="ch-blurb">Ten ways to be wrong, each with a diagnostic. Label every entry in your error log with one of these; the pattern that emerges is your actual curriculum.</p>
+</header>
+
+<p class="lead">Mistakes in this material are not random. They fall into ten families, and knowing which family you are prone to is worth more than knowing another result.</p>
+<p>Use the log honestly. One line per error: what you did, what was right, and the class. After twenty entries the distribution will be lopsided, and the two heaviest classes are where your remaining study time should go.</p>
+
+<div class="box trap">
+<span class="label">T1 &middot; Off-by-one and forgotten terms</span>
+<p><strong>Symptom:</strong> the method is right and the number is slightly wrong. Dropped bias terms in a parameter count; a floor not taken in a convolution size; a missing continuity correction; a strict inequality read as non-strict; &ldquo;the smallest \( t \) exceeding&rdquo; confused with &ldquo;the \( t \) solving.&rdquo;</p>
+<p><strong>Diagnostic:</strong> recompute the smallest instance by hand. A one-layer network, a three-block stack, a two-token vocabulary &mdash; if the small case disagrees with your formula, the formula has a missing term.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T2 &middot; The wrong balance</span>
+<p><strong>Symptom:</strong> an optimum that looks plausible and is wrong. The canonical instance is writing the compute-optimal condition as \( AN^{-a} = BD^{-b} \) rather than the exponent-weighted \( aAN^{-a} = bBD^{-b} \). A close cousin is adding standard deviations where variances should be added.</p>
+<p><strong>Diagnostic:</strong> never assert a balance condition; derive it by substitution. If you did not differentiate, you guessed.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T3 &middot; Mean and maximum confused</span>
+<p><strong>Symptom:</strong> concluding that a technique which helps must have improved the aggregate you first reached for. The reversal trick leaves the mean lag exactly unchanged and makes the maximum worse, yet helps. Two agents with equal average performance across environments need not have equal weighted scores.</p>
+<p><strong>Diagnostic:</strong> when a technique helps, ask which statistic actually moved &mdash; and be prepared for the answer to be &ldquo;the shape of the distribution, not its mean.&rdquo;</p>
+</div>
+
+<div class="box trap">
+<span class="label">T4 &middot; Metric mistaken for capability</span>
+<p><strong>Symptom:</strong> attributing to the model what belongs to the ruler. An exact-match cliff read as a discontinuous capability; a contaminated benchmark read as skill; coverage quoted as accuracy; a perplexity drop that sounds enormous and is half a bit.</p>
+<p><strong>Diagnostic:</strong> for any reported number, ask what would change it besides the model. If the answer is &ldquo;the threshold,&rdquo; &ldquo;the test set's provenance,&rdquo; or &ldquo;the selector,&rdquo; you are looking at a measurement, not a capability.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T5 &middot; Direction reversed</span>
+<p><strong>Symptom:</strong> the magnitude is right and the sign of the reasoning is inverted. Believing noisy weights are the expensive ones (they are the cheap ones); that quantization slows decoding (it speeds it up); that factorizing a large kernel costs expressiveness (it adds a nonlinearity); that voting always helps (below \( p = \tfrac12 \) it hurts); that dilation reduces resolution (it preserves it).</p>
+<p><strong>Diagnostic:</strong> state the claim, then construct the extreme case. Infinite precision, zero bits, \( p = 0 \), one micro-batch. Extremes make reversed signs obvious.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T6 &middot; Logarithm and exponent slips</span>
+<p><strong>Symptom:</strong> a factor of \( \ln 2 \) adrift, or a decade confused with a factor. Mixing natural and base-two logarithms; losing the sign of \( \ln(0.x) \); reporting &ldquo;1.36&rdquo; when the answer is \( 10^{1.36} \).</p>
+<p><strong>Diagnostic:</strong> carry units. &ldquo;Decades&rdquo; and &ldquo;factors&rdquo; are different quantities; bits and nats are different quantities. Writing the unit after every number catches this class almost entirely.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T7 &middot; Rate confused with stock</span>
+<p><strong>Symptom:</strong> a per-unit quantity reported as a total or vice versa. A KV cache quoted per token when the total was wanted; tokens per cycle reported as tokens per second; a bubble fraction confused with an absolute idle time.</p>
+<p><strong>Diagnostic:</strong> say the quantity aloud with its denominator. &ldquo;Bytes per token,&rdquo; &ldquo;tokens per second,&rdquo; &ldquo;operations per byte.&rdquo; A quantity you cannot name with a denominator is one you have not pinned down.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T8 &middot; Objective confused with estimator</span>
+<p><strong>Symptom:</strong> believing a computational improvement changed what is being computed. Streaming softmax is exact; speculative decoding is exact; the preference-optimization collapse changed the estimator, not the objective. Quantization is the one technique in this group that genuinely does change the function &mdash; which is precisely why the distinction is worth policing.</p>
+<p><strong>Diagnostic:</strong> for each technique, ask whether two implementations would produce identical outputs given identical randomness. If yes, it is an estimator change and nothing about the model's behavior may be attributed to it.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T9 &middot; The unnamed budget</span>
+<p><strong>Symptom:</strong> &ldquo;this makes it faster&rdquo; or &ldquo;this makes it smaller,&rdquo; with no resource specified. Low-rank adaptation saves optimizer state, not training arithmetic. Grouped-query attention saves cache, not weight reads. A mixture-of-experts saves per-token compute, not memory.</p>
+<p><strong>Diagnostic:</strong> refuse to evaluate any efficiency claim until the budget is named &mdash; weights, optimizer state, activations, bandwidth, training operations, serving operations, or human preference data. Most confused arguments in this field dissolve at this question.</p>
+</div>
+
+<div class="box trap">
+<span class="label">T10 &middot; Degenerate regimes ignored</span>
+<p><strong>Symptom:</strong> a formula applied where its assumptions have collapsed. A group of samples all correct, giving zero advantage and no learning signal. Voting below the threshold. A pipeline with one micro-batch. &ldquo;Diverse&rdquo; samples drawn at temperature zero. Guidance with a negative weight.</p>
+<p><strong>Diagnostic:</strong> for every formula you derive, evaluate it at both extremes of its parameter before using it. This is also where examiners and interviewers live, because the degenerate case reveals whether you derived the result or memorized it.</p>
+</div>
+
+<h2>Using the log</h2>
+<p>Two habits make the taxonomy work. First, log the error <em>when it happens</em>, not at the end of a session &mdash; the reasoning that produced it is only recoverable while it is fresh. Second, when a class accumulates five entries, do not simply resolve to be careful. Go back to the chapter that introduced the underlying derivation and reproduce it from scratch; a repeated trap almost always signals that a derivation was memorized rather than built.</p>
+<p>A note on T4 and T9, which between them account for most professional disagreements in this field: they are not really arithmetic errors at all. They are failures to ask what a number refers to. That question &mdash; what exactly is being measured, and out of which budget &mdash; is the habit this book most wants to leave you with.</p>
+
+<footer>
+  <span>Appendix B &middot; The Trap Taxonomy</span>
+  <span><a href="appendix-c.html">Next: The Lab Manual &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

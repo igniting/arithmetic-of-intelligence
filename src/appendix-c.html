@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appendix C · The Lab Manual — The Arithmetic of Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="book.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false})"></script>
+<style>
+.lab{background:var(--box);border:1px solid var(--rule);border-left:4px solid var(--blue);padding:20px 22px;margin:26px 0}
+.lab .lnum{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-dk);font-weight:600}
+.lab h3{margin:6px 0 10px;color:var(--ink)}
+.crit{background:var(--box-alt);padding:12px 16px;margin-top:12px;border-radius:2px}
+.crit strong{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--rust-dk);display:block;margin-bottom:5px}
+</style>
+</head>
+<body>
+
+<div class="chrome"><div class="chrome-in">
+  <a class="home" href="index.html">&larr; The Arithmetic of Intelligence</a>
+  <div class="nav"><a href="appendix-b.html">&larr; Appendix B</a><a href="appendix-d.html">Appendix D &rarr;</a></div>
+</div></div>
+
+<div class="page">
+
+<header class="opener">
+  <span class="eyebrow">Appendix C</span>
+  <h1 class="ch">The Lab Manual</h1>
+  <p class="ch-blurb">Eight builds. Each is accepted only when it produces a number your derivation predicted in advance &mdash; because a derivation confirmed by your own running code is learned twice.</p>
+</header>
+
+<p class="lead">Reading a derivation convinces you. Writing code that reproduces its number to three decimal places convinces you differently, and more permanently.</p>
+<p>These labs run alongside Part III, roughly one per chapter from Chapter 10 onward, though several draw on Part II material. Each takes four to six hours. The rule that makes them worth the time: <strong>predict the number before you run anything.</strong> Write the expected value in your notebook, then run the code. When they disagree, one of the two is wrong, and finding out which is where the learning happens &mdash; more often than you would expect, it is the code.</p>
+<p>Scaffolding: a minimal transformer implementation such as <a href="https://github.com/karpathy/nanoGPT">nanoGPT</a> and the <a href="https://karpathy.ai/zero-to-hero.html">Zero to Hero</a> lecture series cover Labs 1 through 4 comfortably. <a href="https://github.com/karpathy/minbpe">minbpe</a> is a reference for Lab 1. From Lab 6, a preference-training library such as <a href="https://github.com/huggingface/trl">TRL</a> is permitted, but write the loss function yourself first.</p>
+
+<div class="lab">
+<span class="lnum">Lab 1 &middot; alongside Chapter 10</span>
+<h3>A byte-pair tokenizer, from scratch</h3>
+<p>Implement byte-pair encoding: count adjacent pairs, merge the most frequent, repeat. Train it on a megabyte of text and use it to encode and decode round-trip.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Round-trip encoding and decoding returns the input exactly, for a corpus containing multi-byte characters. Report the compression ratio &mdash; bytes in, tokens out &mdash; and reproduce a known merge sequence on a short test string. Predict the vocabulary size after \( k \) merges before running.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 2 &middot; alongside Chapter 11</span>
+<h3>Attention, and a streaming softmax</h3>
+<p>Implement scaled dot-product attention and a full transformer block from primitives. Then, separately, implement the streaming softmax of Derivation 11.1 &mdash; running maximum, running normalizer, block-wise rescaling.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Your streaming softmax matches a library softmax to within \( 10^{-6} \) on random inputs of at least a thousand elements, processed in at least five blocks. Before running, compute by hand the two-block example of Derivation 11.1 and confirm your implementation reproduces <span class="keynum">1.553</span>.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 3 &middot; alongside Chapter 12</span>
+<h3>Train a character-level language model</h3>
+<p>Train a small transformer on a few megabytes of text until the validation loss is stable. Report loss in nats per character, then convert to bits per character.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Validation loss at or below 1.6 nats per character. Then the real criterion: using Chapter 9's identity, <em>predict</em> the compressed size of the corpus from your bits-per-character figure, write the prediction down, and compare against what a general-purpose compressor achieves on the same file. Explain any gap.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 4 &middot; alongside Chapter 12</span>
+<h3>A key&ndash;value cache</h3>
+<p>Add incremental decoding with a KV cache to your Lab 3 model, so that generating token \( t+1 \) reuses the keys and values computed for tokens \( 1 \ldots t \).</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Generated output is bit-identical with and without the cache, given the same random seed &mdash; this is the correctness test, and it catches nearly every indexing bug. Then measure tokens per second with and without, and explain the speedup using Chapter 10's roofline argument. Predict the cache's size in bytes from Derivation 10.1 and verify against measured memory.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 5 &middot; alongside Chapter 13</span>
+<h3>Low-rank adaptation, from scratch</h3>
+<p>Implement a low-rank adapter on one weight matrix of your model: freeze the original, add a trainable \( BA \) product of rank \( r \), and train only the adapter.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Your printed count of trainable parameters equals \( 2rd \) <em>exactly</em> &mdash; not approximately. Measure optimizer-state memory before and after, and confirm the ratio matches the fraction of parameters made trainable. State which budget you saved and which you did not.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 6 &middot; alongside Chapter 13</span>
+<h3>Preference optimization</h3>
+<p>Take a small open pretrained model as both policy and frozen reference. Implement the collapsed preference loss of Derivation 13.2 yourself &mdash; the log-ratio difference, scaled by \( \beta \), through a logistic. Train on a public preference dataset.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>The loss at step zero equals \( \ln 2 = 0.693 \). <em>Derive why before you run it</em> &mdash; at initialization the policy is the reference, both log-ratios vanish, the margin is zero, and \( -\ln\sigma(0) = \ln 2 \). This single check catches almost every implementation error. Then: the mean margin increases monotonically over training, and implied-reward accuracy on held-out pairs exceeds 60%.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 7 &middot; alongside Chapter 15</span>
+<h3>Post-training quantization</h3>
+<p>Quantize your Lab 3 model's weights to 8 bits with a uniform quantizer, and measure both the weight error and the effect on model quality.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Measured mean squared quantization error is within a factor of two of the \( \Delta^2/12 \) prediction &mdash; compute the prediction first. Report the change in validation perplexity, and separately report the error for a layer with outlier weights, confirming Derivation 12.1's \( R^2 \) sensitivity.</p>
+</div>
+</div>
+
+<div class="lab">
+<span class="lnum">Lab 8 &middot; alongside Chapter 16</span>
+<h3>Speculative decoding</h3>
+<p>Train or obtain a smaller draft model compatible with your Lab 3 model's tokenizer. Implement draft-and-verify decoding with the rejection rule of Derivation 11.2.</p>
+<div class="crit"><strong>Acceptance</strong>
+<p>Two criteria. <em>Correctness:</em> over many samples at fixed temperature, the output token distribution is statistically indistinguishable from the target model's alone &mdash; the technique is exact, and your implementation must demonstrate it. <em>Performance:</em> measure the empirical acceptance rate \( \alpha \), then confirm that measured tokens per cycle falls within 10% of \( \frac{1-\alpha^{k+1}}{1-\alpha} \).</p>
+</div>
+</div>
+
+<h2>On what the labs are for</h2>
+<p>They are not for learning a framework. They are for closing the loop between a symbol and a measurement &mdash; so that \( \Delta^2/12 \) stops being a formula you can restate and becomes a number you have watched appear on your own screen. Three of the eight acceptance criteria (Labs 2, 6, and 8) are exactness checks: they verify that a technique you derived as mathematically equivalent really is equivalent in floating point. Those three are the most valuable, because exactness is the property most often assumed and least often verified.</p>
+<p>If time is short, do Labs 2, 4, and 6. They cover the streaming derivation, the memory-versus-compute distinction that organizes all of Part III, and the collapse that organizes modern post-training.</p>
+
+<footer>
+  <span>Appendix C &middot; The Lab Manual</span>
+  <span><a href="appendix-d.html">Next: Solutions &rarr;</a></span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,197 @@
+/* Print stylesheet for the PDF edition.
+   The web edition uses src/book.css; this file governs the bound book:
+   page size and margins, running page numbers, part dividers, and the
+   break rules that keep derivation boxes off page boundaries. */
+
+@page {
+  size: 170mm 244mm;                 /* Royal octavo — a real book trim */
+  margin: 20mm 18mm 22mm 18mm;
+  @bottom-center {
+    content: counter(page);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; color: #46535F;
+    margin-top: 6mm;
+  }
+}
+@page :first { @bottom-center { content: ''; } }
+@page cover  { margin: 0; @bottom-center { content: ''; } }
+@page part   { @bottom-center { content: ''; } }
+
+:root{
+  --paper:#FFFFFF; --ink:#1C2733; --ink-soft:#46535F; --rule:#C9D2D6;
+  --blue:#2B5DA8; --blue-dk:#1E4176; --rust:#A64B2A; --rust-dk:#7E3418;
+  --grid:rgba(43,93,168,.06); --box:#FAFBFB; --box-alt:#F0F3F2;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#fff; color:var(--ink);
+  font-family:'Source Serif 4',Georgia,serif;
+  font-size:9.9pt; line-height:1.52;
+  text-align:justify; hyphens:auto;
+}
+a{color:var(--blue); text-decoration:none}
+
+/* ---------- cover ---------- */
+.cover-page{
+  page:cover; height:244mm; padding:26mm 20mm 20mm 20mm;
+  break-after:page; text-align:left;
+  display:flex; flex-direction:column;
+}
+.cover-fig{width:100%; margin-bottom:3mm}
+.coverfig{width:100%; height:auto; display:block}
+.cover-cap{font-family:'IBM Plex Mono',monospace;font-size:7pt;letter-spacing:.08em;
+  color:#8A97A0;text-align:right;margin-bottom:8mm}
+.cover-rule{border:none;border-top:1.6pt solid var(--ink);margin:0 0 7mm}
+.cover-title{font-family:'Zilla Slab',serif;font-weight:700;font-size:38pt;
+  line-height:1.02;margin:0 0 6mm;letter-spacing:-.015em;text-align:left}
+.cover-sub{font-family:'Zilla Slab',serif;font-weight:400;font-size:12.5pt;
+  color:var(--ink-soft);line-height:1.34;max-width:112mm;text-align:left;margin:0}
+.cover-author{margin-top:auto;font-family:'IBM Plex Mono',monospace;font-size:10pt;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink);
+  padding-top:6mm;border-top:.5pt solid var(--rule)}
+
+/* ---------- front matter ---------- */
+.front{break-after:page}
+.front h2{font-family:'Zilla Slab',serif;font-weight:600;font-size:17pt;
+  margin:0 0 5mm;padding-bottom:2mm;border-bottom:1.2pt solid var(--ink);text-align:left}
+.front h3{font-family:'Zilla Slab',serif;font-weight:600;font-size:11pt;
+  margin:6mm 0 2mm;color:var(--blue-dk);text-align:left}
+.front p{margin:0 0 3.2mm}
+.front p.lead{font-size:11pt;line-height:1.45}
+
+/* ---------- contents ---------- */
+.toc{break-after:page}
+.toc h2{font-family:'Zilla Slab',serif;font-weight:600;font-size:17pt;
+  margin:0 0 6mm;padding-bottom:2mm;border-bottom:1.2pt solid var(--ink);text-align:left}
+.toc ul{list-style:none}
+.toc-part{font-family:'IBM Plex Mono',monospace;font-size:7.6pt;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--blue-dk);margin:6mm 0 2mm}
+.toc-row{display:flex;align-items:baseline;gap:2mm;padding:1.5mm 0;
+  border-bottom:.3pt solid var(--rule)}
+.toc-num{font-family:'IBM Plex Mono',monospace;font-size:8.5pt;color:var(--blue);
+  font-weight:600;min-width:8mm}
+.toc-title{font-family:'Zilla Slab',serif;font-weight:600;font-size:10pt;color:var(--ink)}
+.toc-dots{flex:1;border-bottom:.3pt dotted var(--rule);margin:0 1mm;transform:translateY(-1mm)}
+.toc-pg a::after{content:target-counter(attr(href), page);
+  font-family:'IBM Plex Mono',monospace;font-size:8.5pt;color:var(--ink-soft)}
+
+/* ---------- part divider ---------- */
+.part-page{page:part;break-before:page;break-after:page;height:200mm;
+  display:flex;align-items:center;justify-content:flex-start}
+.part-inner{border-left:3pt solid var(--blue);padding-left:8mm}
+.part-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:8pt;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--blue-dk)}
+.part-title{font-family:'Zilla Slab',serif;font-weight:700;font-size:26pt;
+  margin-top:3mm;line-height:1.1;text-align:left}
+
+/* ---------- chapter ---------- */
+.chapter{break-before:page}
+.ch-open{padding:0 0 5mm;margin-bottom:5mm;border-bottom:1.5pt solid var(--ink)}
+.ch-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:7.6pt;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--blue-dk)}
+.ch-title{font-family:'Zilla Slab',serif;font-weight:700;font-size:25pt;
+  line-height:1.06;margin:4mm 0 3mm;text-align:left;letter-spacing:-.005em}
+.ch-blurb{font-style:italic;color:var(--ink-soft);font-size:10.5pt;
+  line-height:1.4;text-align:left}
+
+h2{font-family:'Zilla Slab',serif;font-weight:600;font-size:14pt;
+  margin:8mm 0 2.5mm;padding-top:3mm;border-top:1.2pt solid var(--ink);
+  text-align:left;break-after:avoid}
+h3{font-family:'Zilla Slab',serif;font-weight:600;font-size:11pt;
+  margin:5mm 0 1.5mm;color:var(--blue-dk);text-align:left;break-after:avoid}
+h4{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:8pt;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
+  margin:4mm 0 1.5mm;text-align:left;break-after:avoid}
+p{margin:0 0 3.2mm;orphans:2;widows:2}
+p.lead{font-size:11pt;line-height:1.45}
+ul,ol{margin:0 0 3.2mm 6mm}
+li{margin-bottom:1.5mm}
+
+/* ---------- boxes ---------- */
+.box{background:var(--box);border:.4pt solid var(--rule);padding:4mm 5mm;
+  margin:4mm 0;break-inside:avoid-page}
+.box .label{font-family:'IBM Plex Mono',monospace;font-size:7.4pt;letter-spacing:.14em;
+  text-transform:uppercase;display:block;margin-bottom:2mm;font-weight:600}
+.box .title{font-family:'Zilla Slab',serif;font-weight:600;font-size:10.5pt;
+  color:var(--ink);margin-bottom:1.5mm;text-align:left}
+.deriv{border-left:2.5pt solid var(--blue);
+  background:
+    linear-gradient(var(--grid) .4pt,transparent .4pt),
+    linear-gradient(90deg,var(--grid) .4pt,transparent .4pt);
+  background-size:5mm 5mm;background-color:#FCFDFD}
+.deriv .label{color:var(--blue-dk)}
+.worked{border-left:2.5pt solid var(--ink)}
+.worked .label{color:var(--ink)}
+.trap{border-left:2.5pt solid var(--rust);background:#FCF6F3}
+.trap .label{color:var(--rust-dk)}
+.box p:last-child,.box ul:last-child,.box ol:last-child{margin-bottom:0}
+
+/* ---------- drills: answers become inline, not collapsible ---------- */
+.drill{background:var(--box-alt);padding:3.5mm 5mm;margin:4mm 0;break-inside:avoid-page}
+.drill .label{font-family:'IBM Plex Mono',monospace;font-size:7.4pt;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--blue-dk);font-weight:600;display:block;margin-bottom:1.5mm}
+details{margin-top:2mm;border-top:.4pt dashed var(--rule);padding-top:1.5mm}
+summary{font-family:'IBM Plex Mono',monospace;font-size:7.6pt;color:var(--blue);
+  list-style:none;font-weight:600;letter-spacing:.04em}
+summary::-webkit-details-marker{display:none}
+
+/* ---------- exercises ---------- */
+.exgrade{font-family:'IBM Plex Mono',monospace;font-size:8pt;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--rust-dk);font-weight:600;margin:5mm 0 1mm;
+  break-after:avoid}
+ol.ex{margin-left:6mm}
+ol.ex li{margin-bottom:2.2mm}
+
+/* ---------- readings ---------- */
+.readings{background:var(--box);border:.4pt solid var(--rule);padding:4mm 5mm;margin:5mm 0;
+  break-inside:avoid-page}
+.readings h4{margin-top:0}
+.readings ul{list-style:none;margin-left:0}
+.readings li{padding:1.6mm 0;border-bottom:.3pt solid var(--rule)}
+.readings li:last-child{border-bottom:none}
+.readings .how{display:block;font-size:8.8pt;color:var(--ink-soft);margin-top:.6mm}
+
+/* ---------- gate ---------- */
+.gate{border:1pt solid var(--ink);padding:4mm 5mm;margin:6mm 0;background:var(--box);
+  break-inside:avoid-page}
+.gate .label{font-family:'IBM Plex Mono',monospace;font-size:7.6pt;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink);font-weight:600;display:block;margin-bottom:2mm}
+.note{border-left:2.5pt solid var(--blue);background:var(--box);padding:4mm 5mm;margin:4mm 0;
+  break-inside:avoid-page}
+.note .tag{font-family:'IBM Plex Mono',monospace;font-size:7.4pt;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--blue-dk);display:block;margin-bottom:1.5mm;font-weight:600}
+
+.keynum{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--blue-dk)}
+.mathfail{font-family:'IBM Plex Mono',monospace;color:var(--rust-dk);font-size:8.5pt}
+
+/* ---------- appendix-specific ---------- */
+.bank{list-style:none;margin-left:0}
+.bank li{display:flex;gap:3mm;padding:2mm 0;border-bottom:.3pt solid var(--rule);
+  align-items:baseline;break-inside:avoid}
+.bnum{font-family:'IBM Plex Mono',monospace;font-size:8.5pt;color:var(--blue);
+  font-weight:600;min-width:7mm}
+.bbody{flex:1}
+.bch{font-family:'IBM Plex Mono',monospace;font-size:7.6pt;color:var(--ink-soft)}
+.protocol{color:var(--rust-dk);font-weight:600}
+.lab{background:var(--box);border:.4pt solid var(--rule);border-left:2.5pt solid var(--blue);
+  padding:4mm 5mm;margin:5mm 0;break-inside:avoid-page}
+.lab .lnum{font-family:'IBM Plex Mono',monospace;font-size:7.4pt;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--blue-dk);font-weight:600}
+.lab h3{margin:1.5mm 0 2mm;color:var(--ink)}
+.crit{background:var(--box-alt);padding:3mm 4mm;margin-top:2.5mm}
+.crit strong{font-family:'IBM Plex Mono',monospace;font-size:7.4pt;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--rust-dk);display:block;margin-bottom:1mm}
+h3.solch{font-family:'Zilla Slab',serif;font-weight:600;font-size:11.5pt;margin:6mm 0 1mm;
+  color:var(--ink);padding-bottom:1.2mm;border-bottom:.5pt solid var(--rule);break-after:avoid}
+.sol{margin:2.5mm 0 3.5mm;break-inside:avoid-page}
+.sol .q{font-family:'IBM Plex Mono',monospace;font-size:7.8pt;letter-spacing:.06em;
+  color:var(--rust-dk);font-weight:600}
+.sol p{margin:1mm 0 2mm}
+
+/* ---------- math ---------- */
+.katex{font-size:1em}
+.katex-display{margin:3mm 0;break-inside:avoid}
+.katex-display>.katex{font-size:1.02em}
+
+/* screen-only chrome removed */
+.chrome,.cover,.cover-meta,footer{display:none}
