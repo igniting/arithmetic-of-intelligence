@@ -82,7 +82,26 @@
 <p>The chain rule then reads as a matrix product. For a stack of \( \ell \) transformations, the sensitivity of the last output to the first input is</p>
 \[ \frac{\partial h_L}{\partial h_0} = J_L\,J_{L-1}\cdots J_1, \]
 <p>and this product &mdash; a long chain of matrices multiplied together &mdash; is the single most consequential object in Part II. If the factors shrink, the product vanishes geometrically with depth; if they grow, it explodes. Chapter 4 fixes the first problem by adding an identity to every factor, and Chapter 5 meets the same product running along time instead of depth.</p>
-<p><strong>Backpropagation</strong> is the name for evaluating this product efficiently: sweep forward storing activations, then sweep backward multiplying by one Jacobian at a time, accumulating the gradient with respect to each layer's parameters as you pass it. Two facts about it are used later and neither requires the algorithm's details. The backward sweep costs roughly twice the forward sweep, because each layer must propagate a gradient to its input <em>and</em> compute one for its weights. And the activations from the forward pass must be kept until the backward sweep reaches them, which is why they occupy memory &mdash; the third of the budgets Chapter 13 names.</p>
+<p><strong>Backpropagation</strong> is the name for evaluating this product efficiently: sweep forward storing activations, then sweep backward multiplying by one Jacobian at a time, accumulating the gradient with respect to each layer's parameters as you pass it. Two facts about it are used later and neither requires the algorithm's details. The backward sweep costs roughly twice the forward sweep, for the reason the next box counts. And the activations from the forward pass must be kept until the backward sweep reaches them, which is why they occupy memory &mdash; the third of the budgets Chapter 13 names.</p>
+
+<div class="box deriv">
+<span class="label">Derivation</span>
+<p class="title">Six operations per parameter per token</p>
+<p>The two facts above are enough to price training, and the number they produce carries four later chapters. Work in <em>floating-point operations</em> rather than multiply&ndash;accumulates, since that is the unit accelerators are sold in: one multiply&ndash;accumulate is a multiply and an add, so it is <strong>2 FLOPs</strong>.</p>
+<p><em>Forward.</em> By Chapter 1's corollary, each of the \( N \) parameters is used in one multiply&ndash;accumulate per token. That is \( N \) multiply&ndash;accumulates, or \( 2N \) FLOPs per token.</p>
+<p><em>Backward.</em> Each layer must produce two gradients, not one: the gradient with respect to its input, to hand to the layer below, and the gradient with respect to its own weights. Each is a product against the same weight matrix and costs what the forward pass cost. So the backward sweep is \( 2N \) multiply&ndash;accumulates, or \( 4N \) FLOPs per token &mdash; twice the forward pass, which is the origin of that ratio.</p>
+<p>Adding them, training costs about \( 6N \) FLOPs per token, so a run over \( D \) tokens costs</p>
+\[ C \approx 6ND \ \text{FLOPs}, \]
+<p>and serving, which performs the forward pass alone, costs about \( 2N \) FLOPs per generated token. The 6 and the 2 are not measurements of anything. They are 2 FLOPs per multiply&ndash;accumulate times one, two or three passes over the weights, and Chapters 7, 11 and 17 spend their entire budgets in these units.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 2.4</span>
+<p>(a) A 13-billion-parameter model is trained on 2 trillion tokens. Give the training cost in FLOPs. &nbsp; (b) The same model serves \( 5\times10^{12} \) tokens over its life. Give the serving cost, and its ratio to training. &nbsp; (c) Why is the backward pass twice the forward one rather than the same or three times?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( 6 \times 1.3\times10^{10} \times 2\times10^{12} = 1.56\times10^{23} \) FLOPs. &nbsp; (b) \( 2 \times 1.3\times10^{10} \times 5\times10^{12} = 1.3\times10^{23} \), about \( 0.83 \) times the training cost &mdash; serving a popular model is the same order of expense as building it, which is the whole of Chapter 17. &nbsp; (c) Because two gradients are needed at each layer and only one activation: one gradient flows down to the previous layer, one lands on the weights. A layer at the very bottom needs only the second, which is why 6 is an approximation slightly on the high side.</p>
+</details>
+</div>
 
 <h2>2.4 Tokens</h2>
 <p>Language models do not consume characters or words. Text is first cut into <strong>tokens</strong>, drawn from a fixed <strong>vocabulary</strong> of size \( V \), typically tens of thousands of entries: common words are single tokens, rare words split into several pieces, and every possible string is representable because single bytes are in the vocabulary as a fallback. The number of tokens a corpus becomes is what the symbol \( D \) counts in Chapter 7, and the <strong>compression ratio</strong> &mdash; characters per token, usually around four for English &mdash; is what converts between a corpus's size on disk and its size in the units this book budgets in.</p>

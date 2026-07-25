@@ -58,7 +58,23 @@
 </div>
 
 <h2>8.2 Sharding and the memory wall</h2>
-<p>The second penalty is memory. Training a large model in mixed precision with a modern optimizer keeps, per parameter, not just the weight but also gradient and optimizer-state copies &mdash; on the order of 16 bytes per parameter once everything is counted. Multiply by the parameter count and the total is enormous; the remedy is to shard that state across many accelerators, each holding a slice. The arithmetic is mere division &mdash; but you should always compute the <em>unsharded</em> figure first, because that is the wall the sharding exists to climb.</p>
+<p>The second penalty is memory, and its headline number is worth building rather than accepting. Training keeps far more per parameter than the parameter, and what it keeps is countable.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 8.2</span>
+<p class="title">Sixteen bytes for every parameter</p>
+<p>Modern training runs in <strong>mixed precision</strong>: the arithmetic is done in half precision because that is what the hardware is fast at, while a full-precision copy of each weight is kept so that many small updates are not lost to rounding. Count what has to be resident, per parameter, to take one step.</p>
+<p>\( \quad \) Half-precision weight, read by the forward and backward passes &mdash; \( \textbf{2} \) bytes.<br>
+\( \quad \) Half-precision gradient, produced by the backward pass &mdash; \( \textbf{2} \) bytes.<br>
+\( \quad \) Full-precision master weight, which the update is actually applied to &mdash; \( \textbf{4} \) bytes.<br>
+\( \quad \) Full-precision first moment, the optimizer's running mean of gradients &mdash; \( \textbf{4} \) bytes.<br>
+\( \quad \) Full-precision second moment, its running mean of squared gradients &mdash; \( \textbf{4} \) bytes.</p>
+\[ 2 + 2 + 4 + 4 + 4 = 16 \ \text{bytes per parameter.} \]
+<p>The two moments are what an adaptive optimizer keeps so that each coordinate's step can be scaled by its own gradient history &mdash; the cheap approximation to per-axis conditioning sketched in the challenge at the end of Chapter 3. They are why the figure is 16 and not 8: plain gradient descent would keep no moments at all, and the same run would need half the memory and converge far worse.</p>
+<p>Note which entries a technique could hope to remove, because it decides what any memory saving can possibly be worth. Freezing a parameter removes its gradient and all three full-precision copies and leaves only the 2 bytes that must be read to compute anything at all &mdash; fourteen of the sixteen. That is the arithmetic underneath Chapter 13's low-rank adaptation, and it is why the saving there is two orders of magnitude rather than a factor of two.</p>
+</div>
+
+<p>Multiply by the parameter count and the total is enormous; the remedy is to shard that state across many accelerators, each holding a slice. The arithmetic is mere division &mdash; but you should always compute the <em>unsharded</em> figure first, because that is the wall the sharding exists to climb.</p>
 
 <div class="box worked">
 <span class="label">Worked Example 8.2</span>
@@ -80,8 +96,52 @@
 <p>The same caution applies to sharding. &ldquo;12.5 GB per accelerator&rdquo; is a stock; &ldquo;800 GB of state&rdquo; is the stock that matters for feasibility. Quoting only the first hides whether the run is possible at all.</p>
 </div>
 
-<h2>8.3 What the chapter bought</h2>
-<p>Neither penalty of scale is mysterious; both submit to counting. The pipeline bubble, \( (P-1)/(M+P-1) \), comes straight from a timing diagram and explains why micro-batching is mandatory and why pipelines are a last resort. Memory sharding is division, but the unsharded figure is the wall that motivates it. These are the two arithmetic facts that shape how the largest training runs are laid out across hardware &mdash; and they return, transformed, in Chapter 11, where the same roofline thinking governs not training but the economics of serving a trained model one token at a time. Before that, Chapter 9 confronts a subtler problem: once models are this large and this capable, how do we know what they can actually do &mdash; and when a benchmark is lying to us?</p>
+<h2>8.3 Activations, and buying memory back with arithmetic</h2>
+<p>Weights and optimizer state are not the whole bill. The backward pass needs the activations the forward pass produced &mdash; Section 2.3 &mdash; so every intermediate result must be held from the moment it is computed until the gradient reaches it. That store scales with quantities the previous section never mentioned: the batch, the sequence length, and the depth.</p>
+<p>Guess the size before computing it. Optimizer state for a 7-billion-parameter model is 112 GB and does not depend on the batch at all; activations depend on nothing else so strongly. Most people expect activations to be the smaller term. At training batch sizes they are routinely the larger one, and the reason is that they are counted per token rather than per parameter.</p>
+
+<div class="box worked">
+<span class="label">Worked Example 8.3</span>
+<p class="title">What the forward pass leaves behind</p>
+<p>A transformer layer of width \( d \) stores, per token, a handful of intermediate vectors: the block's input, the three projections, the attention output, and the two feed-forward activations at widths \( d \) and \( 4d \). Call it \( c\,d \) values per token per layer, with \( c \) around 10 once everything is counted.</p>
+<p>For \( d = 4096 \), \( L = 32 \), half precision, a batch of 8 sequences of 4096 tokens &mdash; \( B s = 32{,}768 \) tokens in flight:</p>
+\[ 10 \times 4096 \times 32 \times 32{,}768 \times 2 \ \text{bytes} = 8.6\times10^{10} = 86 \ \text{GB}. \]
+<p>Against 112 GB of optimizer state and 14 GB of weights, the activations are the second-largest term and within a factor of two of the largest &mdash; on a batch most practitioners would call modest. Double the sequence length and they pass everything else.</p>
+</div>
+
+<p>The remedy is the trade this book keeps meeting: spend the abundant resource to relieve the binding one. Store the activations at only a few points in the network &mdash; <strong>checkpoints</strong> &mdash; and recompute the rest during the backward pass from the nearest one below.</p>
+
+<div class="box deriv">
+<span class="label">Derivation 8.3</span>
+<p class="title">The square root of depth</p>
+<p>Split \( L \) layers into \( g \) equal segments, storing only each segment's input. Two costs result. The stored activations are the \( g \) checkpoints, plus, while recomputing inside one segment, that segment's \( L/g \) layers:</p>
+\[ \text{stored} \propto g + \frac{L}{g}. \]
+<p>Differentiate with respect to \( g \) &mdash; Chapter 1's constrained-minimum reflex, with no constraint to substitute this time. Setting \( 1 - L/g^2 = 0 \) gives \( g = \sqrt{L} \), and the stored total is \( 2\sqrt{L} \) rather than \( L \).</p>
+<p>The price is one extra forward pass over each segment during the backward sweep: about \( 2N \) FLOPs per token on top of the \( 6N \) of Chapter 2, so roughly a third more arithmetic. At \( L = 64 \) the memory falls by a factor of \( 64/(2\times 8) = 4 \) for that third. Memory is bought with arithmetic at a rate the roofline of Chapter 11 will make it easy to judge.</p>
+</div>
+
+<div class="drill">
+<span class="label">Drill 8.3</span>
+<p>(a) For \( L = 100 \) layers, give the optimal number of checkpoint segments and the factor by which stored activations fall. &nbsp; (b) A run holds 86 GB of activations and 112 GB of optimizer state. Checkpointing at \( \sqrt{L} \) with \( L = 32 \); what is the new activation figure, and which term now binds?</p>
+<details><summary>Show answers</summary>
+<p>(a) \( g = \sqrt{100} = 10 \); stored goes from \( 100 \) to \( 2\sqrt{100} = 20 \), a factor of 5. &nbsp; (b) \( 2\sqrt{32} = 11.3 \) against 32, so activations fall to \( 86 \times 11.3/32 = 30 \) GB. Optimizer state now dominates, and the next thing to attack is the 16 bytes of Derivation 8.2 rather than the activations.</p>
+</details>
+</div>
+
+<h2>8.4 What the splitting costs in traffic</h2>
+<p>One cost remains, and it is the one that decides which axis of parallelism you reach for. Splitting work across devices means the devices must talk, and their link is slower than their memory by roughly the same margin that memory is slower than arithmetic.</p>
+<p>Data parallelism &mdash; every device holds the whole model and processes a different slice of the batch &mdash; requires that the gradients be summed across devices before the step. That sum moves every gradient once: \( 2N \) bytes per device per step in half precision, whatever the batch size. Tensor parallelism, which splits individual matrices across devices, instead exchanges <em>activations</em> at every layer, so its traffic scales with tokens in flight rather than with parameters. Pipeline parallelism moves only the activations at stage boundaries, which is the least traffic of the three &mdash; and buys that with the bubble of Derivation 8.1.</p>
+
+<div class="drill">
+<span class="label">Drill 8.4</span>
+<p>A 7-billion-parameter model is trained data-parallel in half precision over a link carrying 50 GB/s. Give the bytes summed per device per step, and the time that takes. If a step's arithmetic occupies 400 ms, what fraction of the step is communication?</p>
+<details><summary>Show answer</summary>
+<p>\( 2N = 1.4\times10^{10} \) bytes \( = 14 \) GB, taking \( 14/50 = 0.28 \) s. Against a 400 ms step that is 280 ms of talking to 400 ms of working &mdash; 41% of the step, and the reason gradient summation is overlapped with the backward pass rather than performed after it.</p>
+</details>
+</div>
+
+<h2>8.5 What the chapter bought</h2>
+<p>None of the penalties of scale is mysterious; all submit to counting. The pipeline bubble, \( (P-1)/(M+P-1) \), comes straight from a timing diagram and explains why micro-batching is mandatory and why pipelines are a last resort. Memory sharding is division, but the unsharded figure is the wall that motivates it. Activations are counted per token rather than per parameter, which is why they overtake the optimizer state on any serious batch, and checkpointing buys them back at \( 2\sqrt{L} \) for about a third more arithmetic. Communication is the fourth cost, and the axis you choose is a choice about which of parameters or tokens you would rather move. These are the arithmetic facts that shape how the largest training runs are laid out across hardware &mdash; and they return, transformed, in Chapter 11, where the same roofline thinking governs not training but the economics of serving a trained model one token at a time. Before that, Chapter 9 confronts a subtler problem: once models are this large and this capable, how do we know what they can actually do &mdash; and when a benchmark is lying to us?</p>
 
 <h2>Exercises</h2>
 <div class="exset">

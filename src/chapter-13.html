@@ -92,7 +92,7 @@ Active per token: \( 32\,(50 + 2\times150)\text{ M} = 32 \times 350\text{ M} = \
 <span class="label">Worked Example 13.3</span>
 <p class="title">Which budget this actually attacks</p>
 <p>For \( d = 4096 \) and \( r = 16 \): trainable parameters \( 2 \times 16 \times 4096 = 131{,}072 \) against \( d^2 = 16.78 \) M &mdash; <span class="keynum">0.78%</span> of the matrix.</p>
-<p>Now the point. Optimizer state (roughly 16 bytes per parameter, Chapter 8) is paid only on <em>trainable</em> parameters. Fine-tuning a 7-billion-parameter model in full would demand about 112 GB of optimizer state; adapting roughly one percent of it demands about <span class="keynum">1.1 GB</span>. That is why such fine-tuning fits on a single accelerator &mdash; and it has essentially nothing to do with arithmetic, since the forward and backward passes still traverse the full frozen model.</p>
+<p>Now the point. The sixteen bytes per parameter of Derivation 8.2 are paid only on <em>trainable</em> parameters &mdash; fourteen of them, strictly, since the frozen weight must still be read. Fine-tuning a 7-billion-parameter model in full would demand about 112 GB of optimizer state; adapting roughly one percent of it demands about <span class="keynum">1.1 GB</span>. That is why such fine-tuning fits on a single accelerator &mdash; and it has essentially nothing to do with arithmetic, since the forward and backward passes still traverse the full frozen model.</p>
 </div>
 
 <div class="box trap">

@@ -97,13 +97,22 @@ if len(problems) == before:
 # ------------------------------------------------------------ 4. derivation refs
 print("\nderivation references")
 before = len(problems)
+defined_anywhere = set()
+for p in chapters:
+    defined_anywhere |= set(
+        re.findall(r'<span class="label">Derivation ([0-9]+\.[0-9]+)', text(p)))
 for p in chapters:
     t = text(p)
+    own = int(p.stem[-2:])
     defined = set(re.findall(r'<span class="label">Derivation ([0-9]+\.[0-9]+)', t))
-    cited = set(re.findall(r"Derivation ([0-9]+\.[0-9]+)", t))
-    dangling = cited - defined
-    if dangling:
-        bad(f"{p.name}: cites undefined {sorted(dangling)}")
+    for c in sorted(set(re.findall(r"Derivation ([0-9]+\.[0-9]+)", t))):
+        # a chapter's own derivations must be defined in it; a derivation from
+        # another chapter may be cited, but must exist somewhere
+        if int(c.split(".")[0]) == own:
+            if c not in defined:
+                bad(f"{p.name}: cites undefined Derivation {c}")
+        elif c not in defined_anywhere:
+            bad(f"{p.name}: cites Derivation {c}, which no chapter defines")
 if len(problems) == before:
     ok("every cited derivation is defined in its chapter")
 

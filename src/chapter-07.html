@@ -44,7 +44,7 @@
 </div>
 
 <h2>7.2 The compute-optimal allocation</h2>
-<p>Training compute is, to a good approximation, proportional to the product of parameters and tokens: \( C = kND \) for a constant \( k \) (about 6, counting the forward and backward passes). Given a fixed budget \( C \), we want the split of that budget between \( N \) and \( D \) that minimizes the loss. This is a constrained minimization, and we solve it exactly as Chapter 1 prescribed: use the constraint to eliminate one variable, then differentiate.</p>
+<p>Training compute is, to a good approximation, proportional to the product of parameters and tokens: \( C = kND \), with \( k = 6 \) &mdash; two floating-point operations per parameter per token on the forward pass and four on the backward, as counted in Chapter 2. It is not an empirical constant; it is three passes over the weights at two operations each. Given a fixed budget \( C \), we want the split of that budget between \( N \) and \( D \) that minimizes the loss. This is a constrained minimization, and we solve it exactly as Chapter 1 prescribed: use the constraint to eliminate one variable, then differentiate.</p>
 
 <p>One warning before we start, because nearly everyone makes the same mistake here on first contact. When two terms trade off under a constraint, it is tempting to assume the optimum is where the two terms are <em>equal</em>. That is a good instinct and it is very nearly right &mdash; but not quite, and the correction matters. Watch for where the exponents appear, and note that they appear because we differentiated, not because anyone put them there by hand.</p>
 

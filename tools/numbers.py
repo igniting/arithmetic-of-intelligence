@@ -91,6 +91,11 @@ check("7 B, 32 kv-heads, per token", kv_7b, "524{,}288")
 check("7 B at s = 4096", kv_7b * 4096, ">2.15 GB<")
 check("70 B, 8 kv-heads, per token", 2 * 80 * 8 * 128 * FP16, "327{,}680")
 
+print("\ntraining memory (Chapter 8)")
+check("16 bytes/param, itemised", 2+2+4+4+4, "2 + 2 + 4 + 4 + 4 = 16")
+check("activations, 32k tokens in flight", 10*4096*32*32768*2/1e9, "86 \\ \\text{GB}")
+check("data-parallel all-reduce, 7 B", 2*7e9/1e9, "14 \\) GB")
+
 print("\nmemory and utilization")
 check("50 B optimizer state, GB", 50e9 * OPT_BYTES / 1e9, "800 gigabytes")
 check("175 B optimizer state, GB", 175e9 * OPT_BYTES / 1e9, "2{,}800 \\) GB")

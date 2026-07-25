@@ -12,12 +12,8 @@ derived in the text.
 hardware and the lifecycle model, and checks the source against them. It does
 not cover the whole table; rows outside its scope are still yours to grep.
 
-Two rows are under revision — see `docs/SECOND-EDITION-PLAN.md`:
+One row is under revision — see `docs/SECOND-EDITION-PLAN.md`:
 
-- **16 bytes/parameter** is marked *given* below and should not be. It is a
-  count (4 fp32 master weight + 4 momentum + 4 second moment + 4 fp32 gradient),
-  not a measurement, and WP3 derives it. The label changes when the derivation
-  lands, not before.
 - The **Chapter 6 perplexity row** records a result that appears nowhere in
   `src/`. It is kept here as a commitment to write it, not as a record of the
   text as it stands. Flagged below.
@@ -109,7 +105,14 @@ Exponents 0.076, 0.095, 0.74 are **given**.
 | P = 8, bubble ≤ 5% requires | **M ≥ 133** |
 | 50 B params × 16 B/param | **800 GB**, → **12.5 GB** across 64 |
 
-16 bytes/parameter of optimizer state is **given**.
+| activations, d=4096 L=32 fp16, 32,768 tokens | **86 GB** (c ≈ 10 per token per layer) |
+| checkpoint segments | **g = √L**, stored 2√L not L |
+| checkpointing arithmetic surcharge | **+2N** FLOPs/token on 6N, ≈ one third |
+| data-parallel all-reduce, 7 B fp16 | **14 GB** per device per step |
+
+16 bytes/parameter is **derived** in Derivation 8.2: 2 + 2 + 4 + 4 + 4.
+The training and serving costs 6ND and 2NT are **derived** in Chapter 2:
+2 FLOPs per multiply-accumulate, one pass forward and two back.
 
 ## Chapter 9 — Measurement
 
